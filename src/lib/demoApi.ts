@@ -19,7 +19,11 @@ interface StoredUser {
   email: string | null
 }
 
+type CatalogProduct = Omit<Product, 'id' | 'active' | 'createdAt'>
+
 interface DemoDb {
+  /** Versión del catálogo publicado que se copió y slugs de sus productos */
+  catalog?: { version: string; slugs: string[] }
   users: StoredUser[]
   products: Product[]
   orders: Order[]
@@ -31,19 +35,43 @@ let cache: DemoDb | null = null
 
 async function load(): Promise<DemoDb> {
   if (cache) return cache
+  let stored: DemoDb | null = null
   try {
     const raw = localStorage.getItem(KEY)
-    if (raw) return (cache = JSON.parse(raw) as DemoDb)
+    if (raw) stored = JSON.parse(raw) as DemoDb
   } catch {
     // Sin almacenamiento: la demo funciona solo en memoria
   }
-  const res = await fetch(`${BASE}demo/catalog.json`)
-  const items = (await res.json()) as Array<Omit<Product, 'id' | 'active' | 'createdAt'>>
-  const createdAt = new Date().toISOString()
-  const products = items.map((p, i) => ({ ...p, id: i + 1, active: true, createdAt, images: p.images.map((src) => `${BASE}${src}`) }))
-  cache = { users: [], products, orders: [], codes: {}, seq: { user: 0, product: products.length, order: 0 } }
-  save(cache)
+  let published: { version: string; products: CatalogProduct[] } | null = null
+  try {
+    published = await (await fetch(`${BASE}demo/catalog.json`, { cache: 'no-cache' })).json()
+  } catch (err) {
+    if (!stored) throw err
+  }
+  cache = stored ?? { users: [], products: [], orders: [], codes: {}, seq: { user: 0, product: 0, order: 0 } }
+  if (published && cache.catalog?.version !== published.version) {
+    syncCatalog(cache, published.version, published.products)
+    save(cache)
+  }
   return cache
+}
+
+/**
+ * Lleva a la copia del navegador los cambios del catálogo publicado (fotos, precios, productos nuevos o retirados).
+ * Los productos que el visitante creó en el dashboard, sus cuentas y pedidos no se tocan.
+ */
+function syncCatalog(db: DemoDb, version: string, items: CatalogProduct[]) {
+  const slugs = items.map((p) => p.slug)
+  const previous = db.catalog?.slugs ?? slugs
+  db.products = db.products.filter((p) => !previous.includes(p.slug) || slugs.includes(p.slug))
+  const createdAt = new Date().toISOString()
+  for (const item of items) {
+    const fields = { ...item, images: item.images.map((src) => `${BASE}${src}`) }
+    const existing = db.products.find((p) => p.slug === item.slug)
+    if (existing) Object.assign(existing, fields)
+    else db.products.push({ ...fields, id: ++db.seq.product, active: true, createdAt })
+  }
+  db.catalog = { version, slugs }
 }
 
 function save(db: DemoDb) {
