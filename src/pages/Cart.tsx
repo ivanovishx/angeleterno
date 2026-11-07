@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { MATERIAL_LABELS, type Order } from '../../shared/types'
+import { MATERIAL_LABELS, hasZones, type Order } from '../../shared/types'
 import { CustomizationSummary } from '../components/CustomizationSummary'
 import { MemorialPreview } from '../components/MemorialPreview'
 import { api } from '../lib/api'
@@ -66,7 +66,7 @@ export default function Cart() {
                   </div>
                   <p className="font-medium">{money(item.product.price * item.quantity)}</p>
                 </div>
-                <CustomizationSummary c={item.customization} material={item.product.material} />
+                <CustomizationSummary c={item.customization} material={item.product.material} zoned={hasZones(item.product)} />
                 <div className="flex items-center justify-between pt-1">
                   <div className="flex items-center rounded-full ring-1 ring-ink/15">
                     <button className="h-9 w-9 text-lg" aria-label="Quitar uno" onClick={() => cart.update(item.key, { quantity: Math.max(1, item.quantity - 1) })}>

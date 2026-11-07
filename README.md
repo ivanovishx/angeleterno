@@ -9,6 +9,10 @@ React + TypeScript (Vite, Tailwind) en el frontend y Express + SQLite (`node:sql
 - **Personalizador** con vista previa a escala en vivo: nombre, fechas, epitafio, tipografía, símbolo y notas.
   En piezas con metal, el **20% del área de la placa** se reserva para un mensaje familiar en corte láser;
   el límite de caracteres se calcula según las medidas de cada producto (`shared/types.ts → laserCharLimit`).
+- **Zonas personalizables sobre la foto real**: en el dashboard se marcan sobre la foto principal de cada producto
+  el área donde el cliente puede poner su propia imagen (polígono) y la placa con nombre, fechas y mensaje (rectángulo).
+  La vista previa muestra la foto tal cual y solo cambia esas zonas; la imagen del cliente se ve en tono latón,
+  como quedaría en corte láser, y se guarda con el pedido. Productos sin zonas usan la ilustración genérica.
 - **Cuentas sin contraseña**: registro con número de WhatsApp; el código de acceso llega por WhatsApp o correo.
 - **Historial de pedidos** con barra de progreso (Recibido → En diseño → En fabricación → Enviado → Entregado).
 - **Dashboard** (`/admin`): subir productos con varias fotos (arrastrar o tocar), editar, ocultar, destacar,

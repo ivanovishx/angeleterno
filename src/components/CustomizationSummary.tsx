@@ -1,14 +1,28 @@
+import type { ReactNode } from 'react'
 import { FONT_LABELS, PLACEMENT_LABELS, SYMBOL_LABELS, hasMetal, type Customization, type Material } from '../../shared/types'
 import { dateShort } from '../lib/format'
 
-export function CustomizationSummary({ c, material }: { c: Customization; material: Material }) {
-  const rows: Array<[string, string]> = [
+interface Props {
+  c: Customization
+  material: Material
+  /** El producto usa zonas sobre su foto: no aplican ubicación, símbolo ni dedicatoria láser */
+  zoned?: boolean
+}
+
+export function CustomizationSummary({ c, material, zoned = false }: Props) {
+  const rows: Array<[string, ReactNode]> = [
     ['Nombre', c.fullName],
     ['Fechas', [dateShort(c.birthDate), dateShort(c.deathDate)].filter(Boolean).join(' — ')],
     ['Mensaje', c.epitaph],
-    ['Ubicación', c.epitaph ? PLACEMENT_LABELS[c.placement ?? 'placa'] : ''],
-    ...(hasMetal(material) ? ([['Dedicatoria láser (20%)', c.laserMessage]] as Array<[string, string]>) : []),
-    ['Estilo', `${FONT_LABELS[c.font]} · ${SYMBOL_LABELS[c.symbol]}`],
+    ['Ubicación', !zoned && c.epitaph ? PLACEMENT_LABELS[c.placement ?? 'placa'] : ''],
+    ['Dedicatoria láser (20%)', !zoned && hasMetal(material) ? c.laserMessage : ''],
+    ['Imagen', c.customImage && (
+      <a href={c.customImage} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-gold hover:underline">
+        <img src={c.customImage} alt="" className="h-8 w-8 rounded bg-sand object-contain" />
+        Ver imagen original
+      </a>
+    )],
+    ['Estilo', zoned ? FONT_LABELS[c.font] : `${FONT_LABELS[c.font]} · ${SYMBOL_LABELS[c.symbol]}`],
     ['Notas', c.notes],
   ]
   return (

@@ -1,8 +1,8 @@
 import './env.ts'
-import { writeFileSync } from 'node:fs'
+import { copyFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { db, UPLOADS_DIR } from './db.ts'
-import type { Material } from '../shared/types.ts'
+import type { Material, ProductZones } from '../shared/types.ts'
 
 type Shape = 'arco' | 'recto' | 'cruz' | 'ola'
 
@@ -52,7 +52,27 @@ function svg(material: Material, shape: Shape, label: string) {
 </svg>`
 }
 
-const products: Array<{ name: string; material: Material; price: number; w: number; h: number; shape: Shape; featured?: boolean; description: string }> = [
+/** Zonas personalizables de la foto de "Alas de Luz": área de imagen (abajo a la izquierda) y texto de la placa */
+const ALAS_DE_LUZ_ZONES: ProductZones = {
+  image: [
+    [0.205, 0.186], [0.229, 0.243], [0.234, 0.452], [0.229, 0.684], [0.238, 0.704], [0.868, 0.696], [0.868, 0.664],
+    [0.73, 0.661], [0.55, 0.596], [0.472, 0.532], [0.406, 0.452], [0.359, 0.355], [0.299, 0.259], [0.233, 0.191],
+  ],
+  plaque: { x: 0.239, y: 0.74, w: 0.54, h: 0.142 },
+}
+
+const products: Array<{
+  name: string
+  material: Material
+  price: number
+  w: number
+  h: number
+  shape: Shape
+  featured?: boolean
+  description: string
+  /** Foto real en server/seed-assets/, con sus zonas personalizables */
+  photo?: { file: string; zones: ProductZones }
+}> = [
   {
     name: 'Serenidad',
     material: 'metal',
@@ -80,7 +100,9 @@ const products: Array<{ name: string; material: Material; price: number; w: numb
     h: 80,
     shape: 'arco',
     featured: true,
-    description: 'Base de madera de encino con placa metálica sobrepuesta. Las alas se cortan en láser y dejan pasar la luz del día.',
+    description:
+      'Base de madera de nogal con aplicaciones de latón cortadas en láser: cruz, listón y la Virgen de Guadalupe. El área inferior izquierda lleva la imagen que elijas y la placa se graba con nombre, fechas y mensaje de la familia.',
+    photo: { file: 'alas-de-luz.webp', zones: ALAS_DE_LUZ_ZONES },
   },
   {
     name: 'Horizonte',
@@ -119,8 +141,8 @@ if (count > 0 && !process.argv.includes('--force')) {
 }
 
 const insert = db.prepare(
-  `INSERT OR IGNORE INTO products (slug, name, description, material, price, width_cm, height_cm, images, featured)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  `INSERT OR IGNORE INTO products (slug, name, description, material, price, width_cm, height_cm, images, zones, featured)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 )
 for (const p of products) {
   const slug = p.name
@@ -130,6 +152,12 @@ for (const p of products) {
     .replace(/[^a-z0-9]+/g, '-')
   const file = `ejemplo-${slug}.svg`
   writeFileSync(path.join(UPLOADS_DIR, file), svg(p.material, p.shape, p.name))
-  insert.run(slug, p.name, p.description, p.material, p.price, p.w, p.h, JSON.stringify([`/uploads/${file}`]), p.featured ? 1 : 0)
+  const images = [`/uploads/${file}`]
+  if (p.photo) {
+    const photo = `ejemplo-${p.photo.file}`
+    copyFileSync(path.join(import.meta.dirname, 'seed-assets', p.photo.file), path.join(UPLOADS_DIR, photo))
+    images.unshift(`/uploads/${photo}`)
+  }
+  insert.run(slug, p.name, p.description, p.material, p.price, p.w, p.h, JSON.stringify(images), p.photo ? JSON.stringify(p.photo.zones) : null, p.featured ? 1 : 0)
 }
 console.log(`Catálogo de ejemplo listo (${products.length} productos).`)

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { MATERIAL_LABELS, ORDER_STATUS_LABELS, type Order, type OrderStatus } from '../../../shared/types'
+import { MATERIAL_LABELS, ORDER_STATUS_LABELS, hasZones, type Order, type OrderStatus } from '../../../shared/types'
 import { CustomizationSummary } from '../../components/CustomizationSummary'
+import { MemorialPreview } from '../../components/MemorialPreview'
 import { OrderStatusBadge } from '../../components/OrderStatusBadge'
 import { api } from '../../lib/api'
 import { dateLong, money } from '../../lib/format'
+import { previewProductOf } from '../../lib/inscription'
 import { useApi } from '../../lib/useApi'
 
 type Filter = 'activos' | 'todos' | OrderStatus
@@ -72,12 +74,17 @@ export default function AdminOrders() {
             <div className="mt-4 grid gap-5 md:grid-cols-[1fr_260px]">
               <div className="space-y-4">
                 {o.items.map((item, i) => (
-                  <div key={i} className="rounded-xl bg-paper p-4">
-                    <p className="font-medium">
-                      {item.productName} × {item.quantity} <span className="text-sm font-normal text-stone">· {MATERIAL_LABELS[item.material]}</span>
-                    </p>
-                    <div className="mt-2">
-                      <CustomizationSummary c={item.customization} material={item.material} />
+                  <div key={i} className="flex flex-col gap-4 rounded-xl bg-paper p-4 sm:flex-row">
+                    <div className="mx-auto w-40 shrink-0 sm:mx-0">
+                      <MemorialPreview product={previewProductOf(item)} customization={item.customization} className="w-full rounded-lg" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium">
+                        {item.productName} × {item.quantity} <span className="text-sm font-normal text-stone">· {MATERIAL_LABELS[item.material]}</span>
+                      </p>
+                      <div className="mt-2">
+                        <CustomizationSummary c={item.customization} material={item.material} zoned={hasZones(previewProductOf(item))} />
+                      </div>
                     </div>
                   </div>
                 ))}

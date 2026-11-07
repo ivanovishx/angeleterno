@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { MATERIAL_LABELS, laserCharLimit, hasMetal, type Material, type Product } from '../../../shared/types'
+import { MATERIAL_LABELS, laserCharLimit, hasMetal, type Material, type Product, type ProductZones } from '../../../shared/types'
 import { api } from '../../lib/api'
+import { ZoneEditor } from './ZoneEditor'
 
 interface NewImage {
   file: File
@@ -24,6 +25,7 @@ export default function ProductForm() {
   const [featured, setFeatured] = useState(false)
   const [active, setActive] = useState(true)
   const [existing, setExisting] = useState<string[]>([])
+  const [zones, setZones] = useState<ProductZones | null>(null)
   const [added, setAdded] = useState<NewImage[]>([])
   const [dragging, setDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -44,6 +46,7 @@ export default function ProductForm() {
         setFeatured(p.featured)
         setActive(p.active)
         setExisting(p.images)
+        setZones(p.zones)
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false))
@@ -68,6 +71,7 @@ export default function ProductForm() {
     const body = new FormData()
     Object.entries({ name, description, material, price, widthCm, heightCm, featured: String(featured), active: String(active) }).forEach(([k, v]) => body.append(k, v))
     body.append('keepImages', JSON.stringify(existing))
+    body.append('zones', JSON.stringify(zones))
     added.forEach((a) => body.append('images', a.file))
     try {
       await api(isNew ? '/admin/products' : `/admin/products/${id}`, { method: isNew ? 'POST' : 'PUT', body })
@@ -91,6 +95,7 @@ export default function ProductForm() {
   if (loading) return <p className="text-stone">Cargando…</p>
 
   const dims = { widthCm: Number(widthCm) || 1, heightCm: Number(heightCm) || 1 }
+  const mainImage = existing[0] ?? added[0]?.url
 
   return (
     <form onSubmit={submit} className="grid gap-8 lg:grid-cols-[1fr_380px]">
@@ -157,6 +162,21 @@ export default function ProductForm() {
             <input type="checkbox" className="h-5 w-5 accent-[#b8925a]" checked={featured} onChange={(e) => setFeatured(e.target.checked)} />
             Destacado en inicio
           </label>
+        </div>
+
+        <div className="space-y-2 border-t border-ink/10 pt-5">
+          <h3 className="text-2xl">Zonas personalizables</h3>
+          {mainImage ? (
+            <>
+              <p className="text-sm text-stone">
+                Se marcan sobre la foto principal. Si cambias la foto principal, vuelve a revisar las zonas. Sin zonas, la vista previa usa la ilustración
+                genérica.
+              </p>
+              <ZoneEditor src={mainImage} zones={zones} onChange={setZones} />
+            </>
+          ) : (
+            <p className="text-sm text-stone">Sube una foto para marcar el área de imagen y la placa que el cliente puede personalizar.</p>
+          )}
         </div>
       </div>
 

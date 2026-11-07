@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
-import { api, tokenStore } from './api'
+import { ApiError, api, tokenStore } from './api'
 import type { User } from '../../shared/types'
 
 interface AuthState {
@@ -20,7 +20,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!tokenStore.get()) return
     api<{ user: User }>('/auth/me')
       .then((r) => setUser(r.user))
-      .catch(() => tokenStore.set(null))
+      // Solo una sesión inválida cierra la sesión; un fallo de red no
+      .catch((e) => e instanceof ApiError && e.status === 401 && tokenStore.set(null))
       .finally(() => setLoading(false))
   }, [])
 

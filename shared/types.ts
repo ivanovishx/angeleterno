@@ -6,6 +6,49 @@ export const MATERIAL_LABELS: Record<Material, string> = {
   'madera-metal': 'Madera y metal',
 }
 
+/** Punto normalizado (0–1) sobre la foto principal del producto */
+export type ZonePoint = [number, number]
+
+export interface ZoneRect {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/**
+ * Áreas de la foto principal que el cliente puede personalizar. El resto del diseño queda fijo.
+ * Coordenadas normalizadas (0–1) respecto al ancho y alto de la foto.
+ */
+export interface ProductZones {
+  /** Polígono donde el cliente puede poner una imagen propia (opcional) */
+  image: ZonePoint[] | null
+  /** Rectángulo de la placa donde van nombre, fechas y mensaje */
+  plaque: ZoneRect | null
+}
+
+export function hasZones(p: { images?: string[]; zones?: ProductZones | null }) {
+  return Boolean(p.images?.[0] && (p.zones?.image || p.zones?.plaque))
+}
+
+export function parseZones(input: unknown): ProductZones | null {
+  if (!input || typeof input !== 'object') return null
+  const z = input as Record<string, unknown>
+  const unit = (n: unknown) => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 1
+  const image =
+    Array.isArray(z.image) && z.image.length >= 3 && z.image.length <= 60 && z.image.every((pt) => Array.isArray(pt) && pt.length === 2 && unit(pt[0]) && unit(pt[1]))
+      ? (z.image as ZonePoint[]).map(([x, y]) => [round(x), round(y)] as ZonePoint)
+      : null
+  const r = z.plaque as Record<string, unknown> | null
+  const plaque =
+    r && unit(r.x) && unit(r.y) && unit(r.w) && unit(r.h) && (r.w as number) > 0.02 && (r.h as number) > 0.02
+      ? { x: round(r.x as number), y: round(r.y as number), w: round(r.w as number), h: round(r.h as number) }
+      : null
+  return image || plaque ? { image, plaque } : null
+}
+
+const round = (n: number) => Math.round(n * 10000) / 10000
+
 export interface Product {
   id: number
   slug: string
@@ -17,6 +60,7 @@ export interface Product {
   widthCm: number
   heightCm: number
   images: string[]
+  zones: ProductZones | null
   featured: boolean
   active: boolean
   createdAt: string
@@ -60,6 +104,14 @@ export interface Customization {
   font: FontStyle
   symbol: SymbolOption
   notes: string
+  /** Imagen propia del cliente para la zona de imagen: data URL en el carrito, ruta /uploads/ en el pedido */
+  customImage: string
+  /** Ajuste de la imagen dentro de su zona: escala y desplazamiento relativo al tamaño de la zona */
+  imageScale: number
+  imageX: number
+  imageY: number
+  /** Vuelve transparentes las partes claras (útil para fotos con fondo blanco) */
+  imageKnockout: boolean
 }
 
 export const EMPTY_CUSTOMIZATION: Customization = {
@@ -72,6 +124,11 @@ export const EMPTY_CUSTOMIZATION: Customization = {
   font: 'clasica',
   symbol: 'ninguno',
   notes: '',
+  customImage: '',
+  imageScale: 1,
+  imageX: 0,
+  imageY: 0,
+  imageKnockout: false,
 }
 
 /** Porcentaje del área de la placa metálica que puede personalizarse con corte láser */
@@ -115,6 +172,10 @@ export interface OrderItem {
   unitPrice: number
   quantity: number
   customization: Customization
+  /** Copia de los datos del producto necesarios para volver a dibujar la vista previa */
+  widthCm?: number
+  heightCm?: number
+  zones?: ProductZones | null
 }
 
 export interface Order {

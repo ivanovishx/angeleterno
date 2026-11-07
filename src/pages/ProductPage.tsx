@@ -48,7 +48,13 @@ export default function ProductPage() {
         <div className="md:sticky md:top-24 md:self-start">
           <div className="rounded-3xl bg-sand p-6">
             {view === 'preview' ? (
-              <MemorialPreview product={p} customization={customization} className="mx-auto max-h-[60vh] w-full" />
+              <MemorialPreview
+                product={p}
+                customization={customization}
+                className="mx-auto max-h-[70vh] w-full"
+                editable
+                onImageMove={(imageX, imageY) => setCustomization((c) => ({ ...c, imageX, imageY }))}
+              />
             ) : (
               <img src={p.images[view]} alt={p.name} className="mx-auto max-h-[60vh] w-full rounded-2xl object-contain" />
             )}

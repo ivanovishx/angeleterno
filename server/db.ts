@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
-import type { Order, Product, User } from '../shared/types.ts'
+import { parseZones, type Order, type Product, type User } from '../shared/types.ts'
 import { isTestPhone } from './testLogin.ts'
 
 export const ROOT = path.resolve(import.meta.dirname, '..')
@@ -55,6 +55,11 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 `)
 
+// Migración: zonas personalizables por producto
+if (!(db.prepare('PRAGMA table_info(products)').all() as Array<{ name: string }>).some((c) => c.name === 'zones')) {
+  db.exec('ALTER TABLE products ADD COLUMN zones TEXT')
+}
+
 type Row = Record<string, unknown>
 
 export function toProduct(r: Row): Product {
@@ -68,6 +73,7 @@ export function toProduct(r: Row): Product {
     widthCm: Number(r.width_cm),
     heightCm: Number(r.height_cm),
     images: JSON.parse(String(r.images)),
+    zones: r.zones ? parseZones(JSON.parse(String(r.zones))) : null,
     featured: Boolean(r.featured),
     active: Boolean(r.active),
     createdAt: String(r.created_at),

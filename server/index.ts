@@ -2,7 +2,7 @@ import './env.ts'
 import express, { type Request } from 'express'
 import multer from 'multer'
 import { randomBytes } from 'node:crypto'
-import { existsSync, unlink } from 'node:fs'
+import { existsSync, unlink, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
 import { db, ROOT, UPLOADS_DIR, toOrder, toProduct, toUser } from './db.ts'
@@ -17,6 +17,7 @@ import {
   SYMBOL_LABELS,
   hasMetal,
   laserCharLimit,
+  parseZones,
   type Customization,
   type Material,
   type OrderItem,
@@ -25,7 +26,10 @@ import {
 
 const isProd = process.env.NODE_ENV === 'production'
 const app = express()
-app.use(express.json({ limit: '1mb' }))
+// Los pedidos pueden traer la imagen propia del cliente (data URL), por eso aceptan cuerpos más grandes
+const jsonSmall = express.json({ limit: '1mb' })
+const jsonOrders = express.json({ limit: '25mb' })
+app.use((req, res, next) => (req.path === '/api/orders' ? jsonOrders : jsonSmall)(req, res, next))
 app.use(loadUser)
 app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '30d' }))
 
@@ -173,13 +177,23 @@ function productFields(req: Request) {
   if (!material) return { error: 'Selecciona un material.' }
   if (!(fields.price > 0)) return { error: 'El precio debe ser mayor a 0.' }
   if (!(fields.widthCm > 0 && fields.heightCm > 0)) return { error: 'Indica las medidas en centímetros.' }
-  return { fields: { ...fields, material } }
+  let zones = null
+  try {
+    zones = parseZones(JSON.parse(b.zones || 'null'))
+  } catch {
+    return { error: 'Las zonas personalizables no son válidas.' }
+  }
+  return { fields: { ...fields, material, zones: zones && JSON.stringify(zones) } }
 }
 
 const uploadedPaths = (req: Request) => ((req.files as Express.Multer.File[] | undefined) ?? []).map((f) => `/uploads/${f.filename}`)
 
+/** Borra archivos subidos, salvo los que algún pedido sigue usando en su copia del producto */
 function removeUploads(paths: string[]) {
-  for (const p of paths) if (p.startsWith('/uploads/')) unlink(path.join(UPLOADS_DIR, path.basename(p)), () => {})
+  const inOrders = db.prepare("SELECT 1 FROM orders WHERE instr(items, ?) > 0 LIMIT 1")
+  for (const p of paths) {
+    if (p.startsWith('/uploads/') && !inOrders.get(p)) unlink(path.join(UPLOADS_DIR, path.basename(p)), () => {})
+  }
 }
 
 app.post('/api/admin/products', requireUser, requireAdmin, upload.array('images', 10), (req, res) => {
@@ -191,10 +205,10 @@ app.post('/api/admin/products', requireUser, requireAdmin, upload.array('images'
   const f = parsed.fields
   const result = db
     .prepare(
-      `INSERT INTO products (slug, name, description, material, price, width_cm, height_cm, images, featured, active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO products (slug, name, description, material, price, width_cm, height_cm, images, zones, featured, active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(uniqueSlug(f.name), f.name, f.description, f.material, f.price, f.widthCm, f.heightCm, JSON.stringify(uploadedPaths(req)), f.featured, f.active)
+    .run(uniqueSlug(f.name), f.name, f.description, f.material, f.price, f.widthCm, f.heightCm, JSON.stringify(uploadedPaths(req)), f.zones, f.featured, f.active)
   res.status(201).json({ product: toProduct(db.prepare('SELECT * FROM products WHERE id = ?').get(result.lastInsertRowid) as Record<string, unknown>) })
 })
 
@@ -218,8 +232,8 @@ app.put('/api/admin/products/:id', requireUser, requireAdmin, upload.array('imag
   const slug = f.name === current.name ? current.slug : uniqueSlug(f.name, current.id)
   db.prepare(
     `UPDATE products SET slug = ?, name = ?, description = ?, material = ?, price = ?, width_cm = ?, height_cm = ?,
-       images = ?, featured = ?, active = ? WHERE id = ?`,
-  ).run(slug, f.name, f.description, f.material, f.price, f.widthCm, f.heightCm, JSON.stringify([...keep, ...uploadedPaths(req)]), f.featured, f.active, current.id)
+       images = ?, zones = ?, featured = ?, active = ? WHERE id = ?`,
+  ).run(slug, f.name, f.description, f.material, f.price, f.widthCm, f.heightCm, JSON.stringify([...keep, ...uploadedPaths(req)]), f.zones, f.featured, f.active, current.id)
   res.json({ product: toProduct(db.prepare('SELECT * FROM products WHERE id = ?').get(current.id) as Record<string, unknown>) })
 })
 
@@ -245,7 +259,31 @@ function cleanCustomization(input: unknown, material: Material, limit: number): 
     font: c.font && String(c.font) in FONT_LABELS ? (c.font as Customization['font']) : EMPTY_CUSTOMIZATION.font,
     symbol: c.symbol && String(c.symbol) in SYMBOL_LABELS ? (c.symbol as Customization['symbol']) : EMPTY_CUSTOMIZATION.symbol,
     notes: str(c.notes, LIMITS.notes),
+    customImage: '',
+    imageScale: clamp(Number(c.imageScale), 0.2, 3, 1),
+    imageX: clamp(Number(c.imageX), -1, 1, 0),
+    imageY: clamp(Number(c.imageY), -1, 1, 0),
+    imageKnockout: c.imageKnockout === true,
   }
+}
+
+const clamp = (n: number, min: number, max: number, fallback: number) => (Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback)
+
+const IMAGE_SIGNATURES: Array<[string, (b: Buffer) => boolean]> = [
+  ['png', (b) => b.subarray(0, 4).toString('hex') === '89504e47'],
+  ['jpg', (b) => b.subarray(0, 3).toString('hex') === 'ffd8ff'],
+  ['webp', (b) => b.subarray(0, 4).toString() === 'RIFF' && b.subarray(8, 12).toString() === 'WEBP'],
+]
+
+/** Decodifica la imagen del cliente (data URL) y verifica que realmente sea PNG, JPG o WEBP */
+function decodeCustomImage(value: unknown): { buf: Buffer; ext: string } | null | 'invalid' {
+  if (typeof value !== 'string' || !value) return null
+  const m = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(value)
+  if (!m) return 'invalid'
+  const buf = Buffer.from(m[2], 'base64')
+  const ext = IMAGE_SIGNATURES.find(([, test]) => test(buf))?.[0]
+  if (!ext || buf.length > 6 * 1024 * 1024) return 'invalid'
+  return { buf, ext }
 }
 
 const money = (n: number) => n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
@@ -257,13 +295,14 @@ app.post('/api/orders', requireUser, async (req, res) => {
   if (shippingAddress.length < 10) return void res.status(400).json({ error: 'Escribe la dirección de entrega completa.' })
 
   const items: OrderItem[] = []
+  const pendingImages: Array<{ item: OrderItem; buf: Buffer; ext: string }> = []
   for (const raw of rawItems) {
     const row = db.prepare('SELECT * FROM products WHERE id = ? AND active = 1').get(Number(raw.productId))
     if (!row) return void res.status(400).json({ error: 'Uno de los productos ya no está disponible.' })
     const p = toProduct(row as Record<string, unknown>)
     const customization = cleanCustomization(raw.customization, p.material, laserCharLimit(p))
     if (!customization.fullName) return void res.status(400).json({ error: `Falta el nombre a grabar en "${p.name}".` })
-    items.push({
+    const item: OrderItem = {
       productId: p.id,
       productName: p.name,
       material: p.material,
@@ -271,7 +310,22 @@ app.post('/api/orders', requireUser, async (req, res) => {
       unitPrice: p.price,
       quantity: Math.max(1, Math.min(10, Math.floor(Number(raw.quantity) || 1))),
       customization,
-    })
+      widthCm: p.widthCm,
+      heightCm: p.heightCm,
+      zones: p.zones,
+    }
+    if (p.zones?.image) {
+      const img = decodeCustomImage(raw.customization?.customImage)
+      if (img === 'invalid') return void res.status(400).json({ error: `La imagen de "${p.name}" debe ser JPG, PNG o WEBP de máximo 6 MB.` })
+      if (img) pendingImages.push({ item, ...img })
+    }
+    items.push(item)
+  }
+  // Las imágenes se guardan solo cuando todo el pedido es válido
+  for (const { item, buf, ext } of pendingImages) {
+    const file = `cliente-${Date.now()}-${randomBytes(4).toString('hex')}.${ext}`
+    writeFileSync(path.join(UPLOADS_DIR, file), buf)
+    item.customization.customImage = `/uploads/${file}`
   }
   const total = items.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
   const result = db

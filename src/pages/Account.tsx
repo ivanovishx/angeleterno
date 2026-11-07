@@ -1,11 +1,13 @@
 import { useState, type FormEvent } from 'react'
 import { Link, Navigate, useSearchParams } from 'react-router-dom'
-import { MATERIAL_LABELS, type Order, type User } from '../../shared/types'
+import { MATERIAL_LABELS, hasZones, type Order, type User } from '../../shared/types'
 import { CustomizationSummary } from '../components/CustomizationSummary'
+import { MemorialPreview } from '../components/MemorialPreview'
 import { OrderProgress, OrderStatusBadge } from '../components/OrderStatusBadge'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { dateLong, money } from '../lib/format'
+import { previewProductOf } from '../lib/inscription'
 import { useApi } from '../lib/useApi'
 
 function Profile({ user }: { user: User }) {
@@ -70,13 +72,15 @@ function OrderCard({ order, highlight }: { order: Order; highlight: boolean }) {
         <div className="space-y-4 border-t border-ink/10 bg-paper/60 p-5">
           {order.items.map((item, i) => (
             <div key={i} className="flex gap-4">
-              {item.image && <img src={item.image} alt="" className="h-20 w-16 shrink-0 rounded-lg object-cover" />}
+              <div className="w-24 shrink-0 self-start rounded-lg bg-sand p-1 sm:w-32">
+                <MemorialPreview product={previewProductOf(item)} customization={item.customization} className="w-full" />
+              </div>
               <div className="min-w-0 flex-1 space-y-2">
                 <p className="font-medium">
                   {item.productName} <span className="font-normal text-stone">× {item.quantity}</span>
                 </p>
                 <p className="text-xs text-stone">{MATERIAL_LABELS[item.material]}</p>
-                <CustomizationSummary c={item.customization} material={item.material} />
+                <CustomizationSummary c={item.customization} material={item.material} zoned={hasZones(previewProductOf(item))} />
               </div>
             </div>
           ))}

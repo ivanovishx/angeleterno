@@ -5,13 +5,16 @@ import {
   PLACEMENT_LABELS,
   SYMBOL_LABELS,
   hasMetal,
+  hasZones,
   laserCharLimit,
   type Customization,
   type FontStyle,
   type MessagePlacement,
   type Product,
+  type ProductZones,
   type SymbolOption,
 } from '../../shared/types'
+import { CustomImageField } from './CustomImageField'
 import { SymbolPath } from './Symbols'
 
 const EPITAPH_IDEAS = ['Siempre en nuestros corazones', 'Tu luz nos sigue guiando', 'Amado esposo, padre y abuelo', 'Descansa en paz']
@@ -54,7 +57,7 @@ function Ideas({ ideas, onPick }: { ideas: string[]; onPick: (v: string) => void
 }
 
 interface Props {
-  product: Pick<Product, 'material' | 'widthCm' | 'heightCm'>
+  product: Pick<Product, 'material' | 'widthCm' | 'heightCm'> & { images?: string[]; zones?: ProductZones | null }
   value: Customization
   onChange: (value: Customization) => void
 }
@@ -62,10 +65,14 @@ interface Props {
 export function Customizer({ product, value, onChange }: Props) {
   const set = <K extends keyof Customization>(key: K, v: Customization[K]) => onChange({ ...value, [key]: v })
   const laserMax = laserCharLimit(product)
+  // Con zonas definidas sobre la foto, solo se personalizan esas zonas: el resto del diseño es fijo
+  const zoneMode = hasZones(product)
+  let step = 0
+  const num = () => ++step
 
   return (
     <div className="space-y-8">
-      <Section title="1. ¿A quién honramos?">
+      <Section title={`${num()}. ¿A quién honramos?`}>
         <div>
           <div className="flex items-baseline justify-between">
             <label htmlFor="c-name" className="label">
@@ -99,7 +106,10 @@ export function Customizer({ product, value, onChange }: Props) {
         </div>
       </Section>
 
-      <Section title="2. Mensaje de la familia" hint="Las palabras con las que la familia quiere recordarle.">
+      <Section
+        title={`${num()}. Mensaje de la familia`}
+        hint={zoneMode ? 'Va en la placa, debajo del nombre y las fechas.' : 'Las palabras con las que la familia quiere recordarle.'}
+      >
         <div>
           <div className="flex justify-end">
             <Counter value={value.epitaph} max={LIMITS.epitaph} />
@@ -113,40 +123,53 @@ export function Customizer({ product, value, onChange }: Props) {
           />
         </div>
         <Ideas ideas={EPITAPH_IDEAS} onPick={(v) => set('epitaph', v)} />
-        <p className="label pt-2">¿Dónde va el mensaje?</p>
-        <div className="grid grid-cols-2 gap-2">
-          {(Object.keys(PLACEMENT_LABELS) as MessagePlacement[]).map((pl) => (
-            <button
-              key={pl}
-              type="button"
-              onClick={() => set('placement', pl)}
-              aria-pressed={value.placement === pl}
-              className={`flex flex-col items-center gap-2 rounded-xl border px-2 py-3 text-center text-xs transition ${
-                value.placement === pl ? 'border-gold bg-gold/10 font-medium ring-2 ring-gold/25' : 'border-ink/15 bg-white hover:border-ink/40'
-              }`}
-            >
-              <svg viewBox="0 0 40 48" className="h-10 w-9" aria-hidden>
-                <path d="M8 34V6c10-4 20-2 26 6v22z" fill="#8a5a3b" />
-                <rect x="3" y="34" width="34" height="11" rx="1.5" fill="#3a2416" />
-                <rect x="6" y="36" width="28" height="7" rx="1" fill="#c9a46a" />
-                {pl === 'placa' ? (
-                  <rect x="10" y="40.5" width="20" height="1.6" fill="#3a2416" />
-                ) : (
-                  <g fill="#e6cf8f">
-                    <rect x="13" y="17" width="16" height="1.8" />
-                    <rect x="15" y="21" width="12" height="1.8" />
-                  </g>
-                )}
-              </svg>
-              {PLACEMENT_LABELS[pl]}
-            </button>
-          ))}
-        </div>
+        {!zoneMode && (
+          <>
+            <p className="label pt-2">¿Dónde va el mensaje?</p>
+            <div className="grid grid-cols-2 gap-2">
+              {(Object.keys(PLACEMENT_LABELS) as MessagePlacement[]).map((pl) => (
+                <button
+                  key={pl}
+                  type="button"
+                  onClick={() => set('placement', pl)}
+                  aria-pressed={value.placement === pl}
+                  className={`flex flex-col items-center gap-2 rounded-xl border px-2 py-3 text-center text-xs transition ${
+                    value.placement === pl ? 'border-gold bg-gold/10 font-medium ring-2 ring-gold/25' : 'border-ink/15 bg-white hover:border-ink/40'
+                  }`}
+                >
+                  <svg viewBox="0 0 40 48" className="h-10 w-9" aria-hidden>
+                    <path d="M8 34V6c10-4 20-2 26 6v22z" fill="#8a5a3b" />
+                    <rect x="3" y="34" width="34" height="11" rx="1.5" fill="#3a2416" />
+                    <rect x="6" y="36" width="28" height="7" rx="1" fill="#c9a46a" />
+                    {pl === 'placa' ? (
+                      <rect x="10" y="40.5" width="20" height="1.6" fill="#3a2416" />
+                    ) : (
+                      <g fill="#e6cf8f">
+                        <rect x="13" y="17" width="16" height="1.8" />
+                        <rect x="15" y="21" width="12" height="1.8" />
+                      </g>
+                    )}
+                  </svg>
+                  {PLACEMENT_LABELS[pl]}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </Section>
 
-      {hasMetal(product.material) && (
+      {zoneMode && product.zones?.image && (
         <Section
-          title="3. Dedicatoria en corte láser"
+          title={`${num()}. Imagen personalizada (opcional)`}
+          hint="Reemplaza el área marcada en la vista previa. Se corta en metal a la medida; antes de fabricar te enviamos la prueba para aprobarla."
+        >
+          <CustomImageField value={value} onChange={(patch) => onChange({ ...value, ...patch })} />
+        </Section>
+      )}
+
+      {hasMetal(product.material) && !zoneMode && (
+        <Section
+          title={`${num()}. Dedicatoria en corte láser`}
           hint={
             <>
               El <strong className="text-ink">20% de la pieza</strong> se corta en metal a la medida con una dedicatoria especial: un apodo, una frase o algo que le apasionaba. Lo verás
@@ -179,8 +202,8 @@ export function Customizer({ product, value, onChange }: Props) {
         </Section>
       )}
 
-      <Section title={`${hasMetal(product.material) ? 4 : 3}. Estilo`}>
-        <p className="label">Tipografía</p>
+      <Section title={`${num()}. ${zoneMode ? 'Tipografía de la placa' : 'Estilo'}`}>
+        {!zoneMode && <p className="label">Tipografía</p>}
         <div className="grid grid-cols-3 gap-2">
           {(Object.keys(FONT_LABELS) as FontStyle[]).map((f) => (
             <button
@@ -197,25 +220,29 @@ export function Customizer({ product, value, onChange }: Props) {
             </button>
           ))}
         </div>
-        <p className="label pt-2">Símbolo</p>
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-          {(Object.keys(SYMBOL_LABELS) as SymbolOption[]).map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => set('symbol', s)}
-              aria-pressed={value.symbol === s}
-              className={`flex flex-col items-center gap-1 rounded-xl border px-1 py-2.5 transition ${
-                value.symbol === s ? 'border-gold bg-gold/10 ring-2 ring-gold/25' : 'border-ink/15 bg-white hover:border-ink/40'
-              }`}
-            >
-              <svg viewBox="0 0 40 40" className="h-7 w-7 fill-ink">
-                {s === 'ninguno' ? <path d="M8 8l24 24M32 8L8 32" stroke="#8b8a86" strokeWidth="2.5" /> : <SymbolPath symbol={s} />}
-              </svg>
-              <span className="text-[11px] text-stone">{SYMBOL_LABELS[s]}</span>
-            </button>
-          ))}
-        </div>
+        {!zoneMode && (
+          <>
+            <p className="label pt-2">Símbolo</p>
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+              {(Object.keys(SYMBOL_LABELS) as SymbolOption[]).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => set('symbol', s)}
+                  aria-pressed={value.symbol === s}
+                  className={`flex flex-col items-center gap-1 rounded-xl border px-1 py-2.5 transition ${
+                    value.symbol === s ? 'border-gold bg-gold/10 ring-2 ring-gold/25' : 'border-ink/15 bg-white hover:border-ink/40'
+                  }`}
+                >
+                  <svg viewBox="0 0 40 40" className="h-7 w-7 fill-ink">
+                    {s === 'ninguno' ? <path d="M8 8l24 24M32 8L8 32" stroke="#8b8a86" strokeWidth="2.5" /> : <SymbolPath symbol={s} />}
+                  </svg>
+                  <span className="text-[11px] text-stone">{SYMBOL_LABELS[s]}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </Section>
 
       <Section title="Notas para el taller" hint="Opcional: indicaciones especiales, fotografía que quieras enviar después, etc.">

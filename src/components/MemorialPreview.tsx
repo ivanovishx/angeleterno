@@ -1,52 +1,33 @@
 import { useId } from 'react'
-import { LASER_CUSTOM_AREA, hasMetal, type Customization, type FontStyle, type Product } from '../../shared/types'
+import { LASER_CUSTOM_AREA, hasMetal, hasZones, type Customization, type Product, type ProductZones } from '../../shared/types'
+import { CHAR_WIDTH, FONT_FAMILY, fullDate, wrap } from '../lib/inscription'
+import { PhotoPreview } from './PhotoPreview'
 import { SymbolPath } from './Symbols'
-
-const FONT_FAMILY: Record<FontStyle, string> = {
-  clasica: "'Cormorant Garamond', Georgia, serif",
-  caligrafica: "'Great Vibes', cursive",
-  moderna: "'Inter', system-ui, sans-serif",
-}
-
-/** Ancho aproximado de un carácter respecto al tamaño de letra, para ajustar el nombre a la placa */
-const CHAR_WIDTH: Record<FontStyle, number> = { clasica: 0.56, caligrafica: 0.42, moderna: 0.62 }
-
-const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-
-/** "1948-01-27" → "27 de Enero de 1948" */
-function fullDate(ymd: string) {
-  const [y, m, d] = ymd.split('-').map(Number)
-  return y && m && d ? `${d} de ${MONTHS[m - 1]} de ${y}` : ''
-}
-
-/** Partición simple por palabras según un ancho estimado en caracteres */
-function wrap(text: string, maxChars: number, maxLines: number) {
-  const words = text.trim().split(/\s+/).filter(Boolean)
-  const lines: string[] = []
-  let line = ''
-  for (const word of words) {
-    const next = line ? `${line} ${word}` : word
-    if (next.length > maxChars && line) {
-      lines.push(line)
-      line = word
-    } else line = next
-  }
-  if (line) lines.push(line)
-  if (lines.length > maxLines) {
-    lines.length = maxLines
-    lines[maxLines - 1] = `${lines[maxLines - 1].slice(0, maxChars - 1)}…`
-  }
-  return lines
-}
 
 /** Voluta decorativa de la placa, dibujada para la esquina izquierda */
 const SCROLL =
   'M0 -34c-12 4-16 18-6 26 7 5 15 0 13-7M0 34c-12-4-16-18-6-26 7-5 15 0 13 7M6 -8c8 2 14 8 14 8s-6 6-14 8M22 -14c6-6 14-6 18-2-6 0-11 3-14 8M22 14c6 6 14 6 18 2-6 0-11-3-14-8'
 
+export interface PreviewProduct extends Pick<Product, 'material' | 'widthCm' | 'heightCm'> {
+  images?: string[]
+  zones?: ProductZones | null
+}
+
 interface Props {
-  product: Pick<Product, 'material' | 'widthCm' | 'heightCm'>
+  product: PreviewProduct
   customization: Customization
   className?: string
+  /** Muestra las zonas editables y permite arrastrar la imagen del cliente */
+  editable?: boolean
+  onImageMove?: (x: number, y: number) => void
+}
+
+/**
+ * Si el producto tiene zonas definidas sobre su foto, se usa la foto real y solo se dibujan
+ * esas zonas; si no, se genera una ilustración de la lápida.
+ */
+export function MemorialPreview(props: Props) {
+  return hasZones(props.product) ? <PhotoPreview {...props} /> : <ArtPreview {...props} />
 }
 
 /**
@@ -54,7 +35,7 @@ interface Props {
  * nombre, fechas y (según `placement`) el mensaje de la familia. En piezas con metal
  * se marca la zona equivalente al 20% del cuerpo reservada para la dedicatoria en corte láser.
  */
-export function MemorialPreview({ product, customization: c, className = '' }: Props) {
+function ArtPreview({ product, customization: c, className = '' }: Props) {
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '')
   const id = (name: string) => `${name}-${uid}`
   const url = (name: string) => `url(#${id(name)})`
