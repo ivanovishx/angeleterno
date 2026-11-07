@@ -70,7 +70,12 @@ const SAMPLE_PRODUCTS: Array<{
   featured?: boolean
   description: string
   /** Foto real en server/seed-assets/, con sus zonas personalizables */
-  photo?: { file: string; zones: ProductZones }
+  photo?: {
+    file: string
+    zones?: ProductZones
+    /** La foto sustituye a la ilustración generada en vez de sumarse a ella */
+    replaceIllustration?: boolean
+  }
 }> = [
   {
     name: 'Serenidad',
@@ -81,6 +86,7 @@ const SAMPLE_PRODUCTS: Array<{
     shape: 'arco',
     featured: true,
     description: 'Placa de acero al carbón con acabado negro mate y corte láser de alta precisión. Arco superior inspirado en la calma del atardecer.',
+    photo: { file: 'serenidad.webp' },
   },
   {
     name: 'Raíz Eterna',
@@ -120,6 +126,7 @@ const SAMPLE_PRODUCTS: Array<{
     h: 90,
     shape: 'cruz',
     description: 'Cruz contemporánea de madera de roble con aristas suavizadas y grabado de nombre y fechas.',
+    photo: { file: 'roble-memorial.webp' },
   },
   {
     name: 'Constelación',
@@ -130,6 +137,7 @@ const SAMPLE_PRODUCTS: Array<{
     shape: 'recto',
     featured: true,
     description: 'Lápida de madera con inserto metálico de estrellas cortadas en láser, para recordar que siempre hay una luz que nos guía.',
+    photo: { file: 'constelacion.webp', replaceIllustration: true },
   },
 ]
 
@@ -155,11 +163,14 @@ export function writeSampleCatalog(dir: string): SampleProduct[] {
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
-    const files = [`ejemplo-${slug}.svg`]
-    writeFileSync(path.join(dir, files[0]), svg(p.material, p.shape, p.name))
+    const files: string[] = []
     if (p.photo) {
-      files.unshift(`ejemplo-${p.photo.file}`)
+      files.push(`ejemplo-${p.photo.file}`)
       copyFileSync(path.join(import.meta.dirname, 'seed-assets', p.photo.file), path.join(dir, files[0]))
+    }
+    if (!p.photo?.replaceIllustration) {
+      files.push(`ejemplo-${slug}.svg`)
+      writeFileSync(path.join(dir, files[files.length - 1]), svg(p.material, p.shape, p.name))
     }
     return {
       slug,
