@@ -1,11 +1,22 @@
+import { useId } from 'react'
 import { LASER_CUSTOM_AREA, hasMetal, type Customization, type FontStyle, type Product } from '../../shared/types'
-import { yearOf } from '../lib/format'
 import { SymbolPath } from './Symbols'
 
 const FONT_FAMILY: Record<FontStyle, string> = {
   clasica: "'Cormorant Garamond', Georgia, serif",
   caligrafica: "'Great Vibes', cursive",
   moderna: "'Inter', system-ui, sans-serif",
+}
+
+/** Ancho aproximado de un carácter respecto al tamaño de letra, para ajustar el nombre a la placa */
+const CHAR_WIDTH: Record<FontStyle, number> = { clasica: 0.56, caligrafica: 0.42, moderna: 0.62 }
+
+const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+
+/** "1948-01-27" → "27 de Enero de 1948" */
+function fullDate(ymd: string) {
+  const [y, m, d] = ymd.split('-').map(Number)
+  return y && m && d ? `${d} de ${MONTHS[m - 1]} de ${y}` : ''
 }
 
 /** Partición simple por palabras según un ancho estimado en caracteres */
@@ -28,6 +39,10 @@ function wrap(text: string, maxChars: number, maxLines: number) {
   return lines
 }
 
+/** Voluta decorativa de la placa, dibujada para la esquina izquierda */
+const SCROLL =
+  'M0 -34c-12 4-16 18-6 26 7 5 15 0 13-7M0 34c-12-4-16-18-6-26 7-5 15 0 13 7M6 -8c8 2 14 8 14 8s-6 6-14 8M22 -14c6-6 14-6 18-2-6 0-11 3-14 8M22 14c6 6 14 6 18 2-6 0-11-3-14-8'
+
 interface Props {
   product: Pick<Product, 'material' | 'widthCm' | 'heightCm'>
   customization: Customization
@@ -35,125 +50,221 @@ interface Props {
 }
 
 /**
- * Vista previa a escala de la lápida. En piezas con metal se marca la franja
- * inferior equivalente al 20% del área total, reservada para el mensaje familiar en corte láser.
+ * Vista previa de la lápida: cuerpo con adornos y, sobre la base, una placa con
+ * nombre, fechas y (según `placement`) el mensaje de la familia. En piezas con metal
+ * se marca la zona equivalente al 20% del cuerpo reservada para la dedicatoria en corte láser.
  */
 export function MemorialPreview({ product, customization: c, className = '' }: Props) {
-  const W = 400
-  const H = Math.round((W * product.heightCm) / product.widthCm)
+  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '')
+  const id = (name: string) => `${name}-${uid}`
+  const url = (name: string) => `url(#${id(name)})`
+
   const metal = hasMetal(product.material)
   const allMetal = product.material === 'metal'
-  const pad = 28
-  const archR = W / 2 - pad
-  const top = pad + archR
-  const baseY = H - pad
-
-  // Franja láser: ancho completo de la placa × 20% de la altura = 20% del área
-  const laserH = (baseY - pad) * LASER_CUSTOM_AREA
-  const laserY = baseY - laserH
-  const contentBottom = metal ? laserY - 12 : baseY - 16
-
-  const body = `M${pad} ${baseY} V${top} A${archR} ${archR} 0 0 1 ${W - pad} ${top} V${baseY} Z`
-  const ink = allMetal ? '#d8bd8f' : '#f3e6d3'
+  const placement = c.placement ?? 'placa'
   const font = FONT_FAMILY[c.font]
   const script = c.font === 'caligrafica'
-  const nameSize = script ? 40 : 32
-  const smallSize = script ? 22 : 17
-  const nameLines = wrap(c.fullName || 'Nombre completo', c.font === 'caligrafica' ? 18 : 20, 2)
-  const epitaphLines = wrap(c.epitaph || 'Tu epitafio aparecerá aquí', 34, 4)
-  const laserLines = wrap(c.laserMessage || 'Mensaje familiar en corte láser', 36, Math.max(1, Math.floor(laserH / 18) - 1))
-  const dates =
-    c.birthDate || c.deathDate ? `${yearOf(c.birthDate) || '····'}  —  ${yearOf(c.deathDate) || '····'}` : '1950  —  2025'
 
-  let y = pad + archR * 0.45
-  const symbolY = y
-  if (c.symbol !== 'ninguno') y += 70
-  else y += 20
-  const nameY = y
-  y += nameLines.length * (nameSize + 4) + 8
-  const datesY = y
-  y += 40
-  const epitaphY = Math.min(y, contentBottom - epitaphLines.length * 20)
+  // ---- Geometría ----
+  const W = 400
+  const bodyX = 50
+  const bodyW = 300
+  const T = 22
+  const bodyH = Math.round(Math.min(520, Math.max(270, bodyW * (product.heightCm / product.widthCm) * 0.78)))
+  const bottom = T + bodyH
+  const baseH = 158
+  const plaque = { x: 50, y: bottom + 22, w: 300, h: 124 }
+  const H = bottom + baseH + 30
+  const bodyPath = `M${bodyX} ${bottom} V${T + 8} C${bodyX + 95} ${T - 10} ${bodyX + 235} ${T + 6} ${bodyX + bodyW} ${T + bodyH * 0.32} V${bottom} Z`
+
+  // ---- Colores por material ----
+  const deco = metal ? url('brass') : '#3a2213'
+  const decoOpacity = metal ? 1 : 0.7
+  const plaqueFill = metal ? url('brass') : url('woodLight')
+  const plaqueInk = metal ? '#3b2412' : '#3a2213'
+
+  // ---- Zona láser (20% del área del cuerpo) en la parte baja del cuerpo ----
+  const laserW = bodyW - 36
+  const laserH = (bodyW * bodyH * LASER_CUSTOM_AREA) / laserW
+  const laserY = bottom - 12 - laserH
+  const laserLines = wrap(c.laserMessage || 'Dedicatoria en corte láser', 30, Math.max(1, Math.floor(laserH / 22) - 1))
+
+  // ---- Mensaje sobre el cuerpo ----
+  const hasSymbol = c.symbol !== 'ninguno'
+  const bodyMsgLines = placement === 'cuerpo' ? wrap(c.epitaph || 'Mensaje de la familia', script ? 20 : 24, 4) : []
+  const bodyMsgSize = script ? 26 : 20
+  const msgAreaTop = T + 40 + (hasSymbol ? 70 : 0)
+  const msgAreaBottom = (metal ? laserY : bottom) - 16
+  const bodyMsgY = (msgAreaTop + msgAreaBottom) / 2 - ((bodyMsgLines.length - 1) * (bodyMsgSize + 4)) / 2
+
+  // ---- Placa: nombre, fechas y mensaje ----
+  const name = c.fullName || 'Nombre completo'
+  const nameSize = Math.min(script ? 34 : 27, 248 / (name.length * CHAR_WIDTH[c.font]))
+  const dates = [fullDate(c.birthDate) || 'Fecha de nacimiento', fullDate(c.deathDate) || 'Fecha de fallecimiento']
+  const plaqueMsg = placement === 'placa' ? wrap(c.epitaph || 'Mensaje de la familia', 42, 2) : []
+  const msgSize = script ? 17 : 12.5
+  const blockH = nameSize + 6 + 2 * 17 + 14 + plaqueMsg.length * (msgSize + 3)
+  let py = plaque.y + (plaque.h - blockH) / 2
+  const nameY = py + nameSize * 0.82
+  py += nameSize + 6
+  const dateY = [py + 13, py + 30]
+  py += 34
+  const dividerY = py + 6
+  py += 14
+  const msgY = plaqueMsg.map((_, i) => py + msgSize * 0.85 + i * (msgSize + 3))
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className={className} role="img" aria-label="Vista previa de la lápida personalizada">
       <defs>
-        <linearGradient id="wood" x1="0" x2="1" y1="0" y2="1">
-          <stop offset="0" stopColor="#9a6844" />
-          <stop offset=".5" stopColor="#7d5034" />
-          <stop offset="1" stopColor="#6a4229" />
+        <linearGradient id={id('wood')} x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0" stopColor="#6e3f22" />
+          <stop offset=".5" stopColor="#552d17" />
+          <stop offset="1" stopColor="#40210f" />
         </linearGradient>
-        <linearGradient id="steel" x1="0" x2="1">
-          <stop offset="0" stopColor="#2a2d33" />
+        <linearGradient id={id('woodDark')} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0" stopColor="#4a2814" />
+          <stop offset="1" stopColor="#2c170b" />
+        </linearGradient>
+        <linearGradient id={id('woodLight')} x1="0" x2="1">
+          <stop offset="0" stopColor="#b98a5c" />
+          <stop offset=".5" stopColor="#d8b183" />
+          <stop offset="1" stopColor="#b3845a" />
+        </linearGradient>
+        <linearGradient id={id('steel')} x1="0" x2="1">
+          <stop offset="0" stopColor="#24272c" />
           <stop offset=".45" stopColor="#3b4048" />
           <stop offset=".55" stopColor="#353a41" />
-          <stop offset="1" stopColor="#24272c" />
+          <stop offset="1" stopColor="#1f2226" />
         </linearGradient>
-        <pattern id="grain" width="400" height="26" patternUnits="userSpaceOnUse">
-          <path d="M0 13 Q100 4 200 13 T400 13" stroke="#000" strokeOpacity=".12" fill="none" />
+        <linearGradient id={id('brass')} gradientUnits="userSpaceOnUse" x1="0" y1="0" x2={W} y2={W * 0.6}>
+          <stop offset="0" stopColor="#8f6c33" />
+          <stop offset=".25" stopColor="#e9d496" />
+          <stop offset=".5" stopColor="#b48d4c" />
+          <stop offset=".75" stopColor="#f1dea6" />
+          <stop offset="1" stopColor="#9a773b" />
+        </linearGradient>
+        <linearGradient id={id('granite')} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0" stopColor="#3a3b3e" />
+          <stop offset="1" stopColor="#141416" />
+        </linearGradient>
+        <pattern id={id('grain')} width="300" height="11" patternUnits="userSpaceOnUse">
+          <path d="M0 5 Q75 1 150 6 T300 5" stroke="#000" strokeOpacity=".18" fill="none" />
         </pattern>
-        <clipPath id="body-clip">
-          <path d={body} />
+        <clipPath id={id('body')}>
+          <path d={bodyPath} />
         </clipPath>
       </defs>
 
-      <path d={body} fill={allMetal ? 'url(#steel)' : 'url(#wood)'} />
-      {!allMetal && <rect width={W} height={H} fill="url(#grain)" clipPath="url(#body-clip)" />}
-      <path d={body} fill="none" stroke="#000" strokeOpacity=".25" strokeWidth="2" />
+      {/* Cuerpo */}
+      <path d={bodyPath} fill={allMetal ? url('steel') : url('wood')} />
+      {!allMetal && <rect width={W} height={H} fill={url('grain')} clipPath={url('body')} />}
+      {metal && <path d={`M${bodyX + bodyW} ${T + bodyH * 0.32} V${bottom}`} stroke={url('brass')} strokeWidth="6" />}
 
-      <g fill={ink} textAnchor="middle" style={{ fontFamily: font }}>
-        {c.symbol !== 'ninguno' && (
-          <g transform={`translate(${W / 2 - 24} ${symbolY - 8}) scale(1.2)`} opacity=".9">
+      {/* Adornos: listón, rama y símbolo */}
+      <g clipPath={url('body')} fill="none" stroke={deco} opacity={decoOpacity} strokeLinecap="round">
+        <path d={`M${bodyX + 22} ${T + 4} C${bodyX + 55} ${T + bodyH * 0.38} ${bodyX + 150} ${T + bodyH * 0.62} ${bodyX + bodyW - 6} ${bottom - 8}`} strokeWidth="7" />
+        <path d={`M${bodyX + 36} ${T + 4} C${bodyX + 70} ${T + bodyH * 0.34} ${bodyX + 160} ${T + bodyH * 0.56} ${bodyX + bodyW - 4} ${bottom - 26}`} strokeWidth="1.8" />
+        <path d={`M${bodyX + 24} ${bottom - 14} C${bodyX + 30} ${bottom - bodyH * 0.3} ${bodyX + 52} ${bottom - bodyH * 0.45} ${bodyX + 70} ${bottom - bodyH * 0.6}`} strokeWidth="2.5" />
+      </g>
+      <g clipPath={url('body')} fill={deco} opacity={decoOpacity}>
+        {[0.1, 0.18, 0.26, 0.34, 0.42, 0.5].map((t, i) => {
+          const x = bodyX + 26 + t * 70
+          const y = bottom - 14 - t * bodyH * 1.1
+          return <ellipse key={i} cx={x + (i % 2 ? 12 : -10)} cy={y} rx="13" ry="5" transform={`rotate(${i % 2 ? -35 : -145} ${x + (i % 2 ? 12 : -10)} ${y})`} />
+        })}
+        {hasSymbol && (
+          <g transform={`translate(${bodyX + 100} ${T + 30}) scale(1.7)`}>
             <SymbolPath symbol={c.symbol} />
           </g>
         )}
-        {nameLines.map((l, i) => (
-          <text key={i} x={W / 2} y={nameY + 28 + i * (nameSize + 4)} fontSize={nameSize} opacity={c.fullName ? 1 : 0.45}>
-            {l}
-          </text>
-        ))}
-        <text x={W / 2} y={datesY + 18} fontSize="17" letterSpacing="3" style={{ fontFamily: FONT_FAMILY.moderna }} opacity=".85">
-          {dates}
-        </text>
-        <rect x={W / 2 - 40} y={datesY + 30} width="80" height="1.5" opacity=".6" />
-        {epitaphLines.map((l, i) => (
-          <text key={i} x={W / 2} y={epitaphY + 20 + i * 21} fontSize={smallSize} fontStyle={script ? 'normal' : 'italic'} opacity={c.epitaph ? 0.95 : 0.4}>
-            {l}
-          </text>
-        ))}
       </g>
 
+      {/* Mensaje sobre el cuerpo */}
+      {bodyMsgLines.length > 0 && (
+        <g textAnchor="middle" fill={metal ? '#f1dea6' : '#f3e2c7'} style={{ fontFamily: font }} opacity={c.epitaph ? 1 : 0.5}>
+          {bodyMsgLines.map((l, i) => (
+            <text
+              key={i}
+              x={bodyX + bodyW / 2 + (hasSymbol ? 30 : 10)}
+              y={bodyMsgY + i * (bodyMsgSize + 4)}
+              fontSize={bodyMsgSize}
+              fontWeight={script ? 400 : 600}
+              stroke="#2a160a"
+              strokeWidth="3"
+              strokeOpacity=".55"
+              paintOrder="stroke"
+            >
+              {l}
+            </text>
+          ))}
+        </g>
+      )}
+
+      {/* Zona láser 20% */}
       {metal && (
         <g>
-          <rect
-            x={pad}
-            y={laserY}
-            width={W - pad * 2}
-            height={laserH}
-            fill={allMetal ? '#1b1d21' : 'url(#steel)'}
-            stroke="#c9a46a"
-            strokeDasharray="6 5"
-            strokeWidth="1.5"
-          />
-          <text x={pad + 8} y={laserY + 14} fontSize="10" fill="#c9a46a" letterSpacing="1.5" style={{ fontFamily: FONT_FAMILY.moderna }}>
+          <rect x={bodyX + 18} y={laserY} width={laserW} height={laserH} rx="6" fill="#000" fillOpacity=".22" stroke="#e9d496" strokeDasharray="6 5" strokeWidth="1.3" />
+          <text x={bodyX + 26} y={laserY + 13} fontSize="9" fill="#e9d496" letterSpacing="1.5" style={{ fontFamily: FONT_FAMILY.moderna }}>
             ZONA LÁSER · 20%
           </text>
-          <g textAnchor="middle" fill={c.laserMessage ? '#f7f4ef' : '#8b8a86'} style={{ fontFamily: font }}>
+          <g textAnchor="middle" fill={c.laserMessage ? url('brass') : '#b9a582'} style={{ fontFamily: font }} opacity={c.laserMessage ? 1 : 0.7}>
             {laserLines.map((l, i) => (
-              <text
-                key={i}
-                x={W / 2}
-                y={laserY + laserH / 2 + 6 + (i - (laserLines.length - 1) / 2) * 18}
-                fontSize={script ? 19 : 15}
-                fontWeight={c.font === 'moderna' ? 600 : 500}
-              >
+              <text key={i} x={bodyX + bodyW / 2} y={laserY + laserH / 2 + 7 + (i - (laserLines.length - 1) / 2) * 21} fontSize={script ? 22 : 17} fontWeight="700">
                 {l}
               </text>
             ))}
           </g>
         </g>
       )}
-      <rect x={pad - 14} y={baseY} width={W - pad * 2 + 28} height={pad - 6} rx="3" fill="#6c6e72" />
+
+      {/* Base */}
+      <rect x="30" y={bottom} width="340" height={baseH} fill={allMetal ? url('steel') : url('woodDark')} />
+      <rect x="30" y={bottom} width="340" height="9" fill="#000" fillOpacity=".35" />
+      <rect x="30" y={bottom} width="340" height="2" fill={metal ? url('brass') : '#7a4a2a'} />
+      <rect x="10" y={bottom + baseH} width="380" height="24" rx="2" fill={url('granite')} />
+      <rect x="10" y={bottom + baseH} width="380" height="2" fill="#fff" fillOpacity=".25" />
+
+      {/* Placa */}
+      <rect x={plaque.x} y={plaque.y} width={plaque.w} height={plaque.h} rx="4" fill={plaqueFill} />
+      <rect x={plaque.x + 5} y={plaque.y + 5} width={plaque.w - 10} height={plaque.h - 10} rx="3" fill="none" stroke={plaqueInk} strokeOpacity=".55" strokeWidth="1.5" />
+      <g fill="none" stroke={plaqueInk} strokeOpacity=".7" strokeWidth="2" strokeLinecap="round">
+        <path d={SCROLL} transform={`translate(${plaque.x + 16} ${plaque.y + plaque.h / 2})`} />
+        <path d={SCROLL} transform={`translate(${plaque.x + plaque.w - 16} ${plaque.y + plaque.h / 2}) scale(-1 1)`} />
+      </g>
+      {[
+        [plaque.x + 12, plaque.y + 12],
+        [plaque.x + plaque.w - 12, plaque.y + 12],
+        [plaque.x + 12, plaque.y + plaque.h - 12],
+        [plaque.x + plaque.w - 12, plaque.y + plaque.h - 12],
+      ].map(([x, y]) => (
+        <circle key={`${x}-${y}`} cx={x} cy={y} r="4.5" fill={metal ? url('brass') : '#a37a50'} stroke={plaqueInk} strokeOpacity=".6" />
+      ))}
+
+      <g textAnchor="middle" fill={plaqueInk}>
+        <text x={W / 2} y={nameY} fontSize={nameSize} fontWeight={script ? 400 : 700} style={{ fontFamily: font }} opacity={c.fullName ? 1 : 0.5}>
+          {name}
+        </text>
+        {dates.map((d, i) => (
+          <text
+            key={i}
+            x={W / 2}
+            y={dateY[i]}
+            fontSize="15"
+            fontWeight="600"
+            style={{ fontFamily: FONT_FAMILY[script ? 'clasica' : c.font] }}
+            opacity={(i === 0 ? c.birthDate : c.deathDate) ? 1 : 0.5}
+          >
+            {d}
+          </text>
+        ))}
+        <path d={`M${W / 2 - 70} ${dividerY}H${W / 2 - 8}M${W / 2 + 8} ${dividerY}H${W / 2 + 70}`} stroke={plaqueInk} strokeWidth="1.2" />
+        <rect x={W / 2 - 4} y={dividerY - 4} width="8" height="8" transform={`rotate(45 ${W / 2} ${dividerY})`} />
+        {plaqueMsg.map((l, i) => (
+          <text key={i} x={W / 2} y={msgY[i]} fontSize={msgSize} fontWeight={script ? 400 : 700} style={{ fontFamily: font }} opacity={c.epitaph ? 1 : 0.5}>
+            {l}
+          </text>
+        ))}
+      </g>
     </svg>
   )
 }

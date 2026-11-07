@@ -25,6 +25,14 @@ export interface Product {
 export type FontStyle = 'clasica' | 'caligrafica' | 'moderna'
 export type SymbolOption = 'ninguno' | 'cruz' | 'angel' | 'paloma' | 'corazon' | 'estrella'
 
+/** Dónde va el mensaje de la familia: en la placa inferior (bajo nombre y fechas) o sobre el cuerpo de la lápida */
+export type MessagePlacement = 'placa' | 'cuerpo'
+
+export const PLACEMENT_LABELS: Record<MessagePlacement, string> = {
+  placa: 'En la placa, bajo el nombre',
+  cuerpo: 'Sobre el cuerpo de la lápida',
+}
+
 export const FONT_LABELS: Record<FontStyle, string> = {
   clasica: 'Clásica',
   caligrafica: 'Caligráfica',
@@ -44,8 +52,9 @@ export interface Customization {
   fullName: string
   birthDate: string
   deathDate: string
-  /** Epitafio grabado en la pieza principal */
+  /** Mensaje de la familia */
   epitaph: string
+  placement: MessagePlacement
   /** Mensaje familiar dentro del 20% del área de corte láser (solo piezas con metal) */
   laserMessage: string
   font: FontStyle
@@ -58,6 +67,7 @@ export const EMPTY_CUSTOMIZATION: Customization = {
   birthDate: '',
   deathDate: '',
   epitaph: '',
+  placement: 'placa',
   laserMessage: '',
   font: 'clasica',
   symbol: 'ninguno',

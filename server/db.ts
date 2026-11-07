@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import type { Order, Product, User } from '../shared/types.ts'
+import { isTestPhone } from './testLogin.ts'
 
 export const ROOT = path.resolve(import.meta.dirname, '..')
 export const DATA_DIR = path.join(ROOT, 'data')
@@ -107,6 +108,7 @@ export function toUser(r: Row): User {
     name: String(r.name),
     phone,
     email: (r.email as string | null) ?? null,
-    isAdmin: adminPhones().includes(phone),
+    // TODO(quitar antes de lanzar): la cuenta de prueba también es administradora
+    isAdmin: adminPhones().includes(phone) || isTestPhone(phone),
   }
 }

@@ -28,6 +28,16 @@ y el código también aparece en pantalla (solo en desarrollo).
 
 Para entrar al dashboard, registra el número que pusiste en `ADMIN_PHONES` (en `.env` de ejemplo: `5500000000`).
 
+## ⚠ Acceso de prueba (quitar antes de lanzar)
+
+Mientras no estén configurados WhatsApp y correo, existe una cuenta de prueba con acceso de administrador:
+
+- **WhatsApp:** `5511112222`
+- **Contraseña (código):** `246810`
+
+Se controla con el flag `TEST_LOGIN_FLAG` en `server/testLogin.ts` (o `TEST_LOGIN=false` en `.env` para apagarlo).
+Para quitarlo por completo, borra ese archivo y las líneas marcadas con `TODO(quitar antes de lanzar)`.
+
 ## Configuración (`.env`)
 
 Ver `.env.example`:

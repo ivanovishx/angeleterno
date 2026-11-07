@@ -1,12 +1,13 @@
-import { FONT_LABELS, SYMBOL_LABELS, hasMetal, type Customization, type Material } from '../../shared/types'
+import { FONT_LABELS, PLACEMENT_LABELS, SYMBOL_LABELS, hasMetal, type Customization, type Material } from '../../shared/types'
 import { dateShort } from '../lib/format'
 
 export function CustomizationSummary({ c, material }: { c: Customization; material: Material }) {
   const rows: Array<[string, string]> = [
     ['Nombre', c.fullName],
     ['Fechas', [dateShort(c.birthDate), dateShort(c.deathDate)].filter(Boolean).join(' — ')],
-    ['Epitafio', c.epitaph],
-    ...(hasMetal(material) ? ([['Mensaje láser (20%)', c.laserMessage]] as Array<[string, string]>) : []),
+    ['Mensaje', c.epitaph],
+    ['Ubicación', c.epitaph ? PLACEMENT_LABELS[c.placement ?? 'placa'] : ''],
+    ...(hasMetal(material) ? ([['Dedicatoria láser (20%)', c.laserMessage]] as Array<[string, string]>) : []),
     ['Estilo', `${FONT_LABELS[c.font]} · ${SYMBOL_LABELS[c.symbol]}`],
     ['Notas', c.notes],
   ]

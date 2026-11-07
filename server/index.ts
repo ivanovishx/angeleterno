@@ -7,6 +7,7 @@ import path from 'node:path'
 
 import { db, ROOT, UPLOADS_DIR, toOrder, toProduct, toUser } from './db.ts'
 import { createOtp, loadUser, normalizePhone, requireAdmin, requireUser, signSession, verifyOtp } from './auth.ts'
+import { TEST_PASSWORD, TEST_USER, isTestPhone, testLoginEnabled } from './testLogin.ts'
 import { emailConfigured, sendEmail, sendWhatsApp, whatsappConfigured } from './notify.ts'
 import {
   EMPTY_CUSTOMIZATION,
@@ -52,6 +53,12 @@ app.post('/api/auth/request-code', async (req, res) => {
   const mode = req.body.mode === 'register' ? 'register' : 'login'
   if (!phone) return void res.status(400).json({ error: 'Número de WhatsApp inválido. Usa 10 dígitos o formato internacional.' })
 
+  // TODO(quitar antes de lanzar): la cuenta de prueba no recibe código; se entra con TEST_PASSWORD
+  if (isTestPhone(phone)) {
+    db.prepare('INSERT OR IGNORE INTO users (name, phone, email) VALUES (?, ?, ?)').run(TEST_USER.name, TEST_USER.phone, TEST_USER.email)
+    return void res.json({ sent: true, phone, channel, destination: 'cuenta de prueba (usa la contraseña de prueba)' })
+  }
+
   const existing = db.prepare('SELECT * FROM users WHERE phone = ?').get(phone) as Record<string, unknown> | undefined
   let name = ''
   let email = ''
@@ -90,6 +97,11 @@ app.post('/api/auth/request-code', async (req, res) => {
 app.post('/api/auth/verify', (req, res) => {
   const phone = normalizePhone(str(req.body.phone, 30))
   if (!phone) return void res.status(400).json({ error: 'Número inválido.' })
+  // TODO(quitar antes de lanzar): acceso directo de la cuenta de prueba
+  if (isTestPhone(phone) && str(req.body.code, 10) === TEST_PASSWORD) {
+    const user = toUser(db.prepare('SELECT * FROM users WHERE phone = ?').get(phone) as Record<string, unknown>)
+    return void res.json({ token: signSession(user.id), user })
+  }
   const result = verifyOtp(phone, str(req.body.code, 10))
   if (!result.ok) return void res.status(400).json({ error: result.error })
 
@@ -228,6 +240,7 @@ function cleanCustomization(input: unknown, material: Material, limit: number): 
     birthDate: str(c.birthDate, 10),
     deathDate: str(c.deathDate, 10),
     epitaph: str(c.epitaph, LIMITS.epitaph),
+    placement: c.placement === 'cuerpo' ? 'cuerpo' : 'placa',
     laserMessage: hasMetal(material) ? str(c.laserMessage, limit) : '',
     font: c.font && String(c.font) in FONT_LABELS ? (c.font as Customization['font']) : EMPTY_CUSTOMIZATION.font,
     symbol: c.symbol && String(c.symbol) in SYMBOL_LABELS ? (c.symbol as Customization['symbol']) : EMPTY_CUSTOMIZATION.symbol,
@@ -328,4 +341,5 @@ app.listen(port, () => {
   console.log(`API de Ángel Eterno en http://localhost:${port}`)
   if (!whatsappConfigured()) console.log('· WhatsApp sin configurar: los códigos se mostrarán en esta consola.')
   if (!emailConfigured()) console.log('· Correo sin configurar: los correos se mostrarán en esta consola.')
+  if (testLoginEnabled()) console.warn('⚠ Acceso de prueba ACTIVO (server/testLogin.ts). Quítalo antes de lanzar.')
 })

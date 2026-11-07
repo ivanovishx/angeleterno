@@ -2,11 +2,13 @@ import type { ReactNode } from 'react'
 import {
   FONT_LABELS,
   LIMITS,
+  PLACEMENT_LABELS,
   SYMBOL_LABELS,
   hasMetal,
   laserCharLimit,
   type Customization,
   type FontStyle,
+  type MessagePlacement,
   type Product,
   type SymbolOption,
 } from '../../shared/types'
@@ -97,7 +99,7 @@ export function Customizer({ product, value, onChange }: Props) {
         </div>
       </Section>
 
-      <Section title="2. Epitafio" hint="Frase principal grabada debajo del nombre.">
+      <Section title="2. Mensaje de la familia" hint="Las palabras con las que la familia quiere recordarle.">
         <div>
           <div className="flex justify-end">
             <Counter value={value.epitaph} max={LIMITS.epitaph} />
@@ -111,14 +113,43 @@ export function Customizer({ product, value, onChange }: Props) {
           />
         </div>
         <Ideas ideas={EPITAPH_IDEAS} onPick={(v) => set('epitaph', v)} />
+        <p className="label pt-2">¿Dónde va el mensaje?</p>
+        <div className="grid grid-cols-2 gap-2">
+          {(Object.keys(PLACEMENT_LABELS) as MessagePlacement[]).map((pl) => (
+            <button
+              key={pl}
+              type="button"
+              onClick={() => set('placement', pl)}
+              aria-pressed={value.placement === pl}
+              className={`flex flex-col items-center gap-2 rounded-xl border px-2 py-3 text-center text-xs transition ${
+                value.placement === pl ? 'border-gold bg-gold/10 font-medium ring-2 ring-gold/25' : 'border-ink/15 bg-white hover:border-ink/40'
+              }`}
+            >
+              <svg viewBox="0 0 40 48" className="h-10 w-9" aria-hidden>
+                <path d="M8 34V6c10-4 20-2 26 6v22z" fill="#8a5a3b" />
+                <rect x="3" y="34" width="34" height="11" rx="1.5" fill="#3a2416" />
+                <rect x="6" y="36" width="28" height="7" rx="1" fill="#c9a46a" />
+                {pl === 'placa' ? (
+                  <rect x="10" y="40.5" width="20" height="1.6" fill="#3a2416" />
+                ) : (
+                  <g fill="#e6cf8f">
+                    <rect x="13" y="17" width="16" height="1.8" />
+                    <rect x="15" y="21" width="12" height="1.8" />
+                  </g>
+                )}
+              </svg>
+              {PLACEMENT_LABELS[pl]}
+            </button>
+          ))}
+        </div>
       </Section>
 
       {hasMetal(product.material) && (
         <Section
-          title="3. Mensaje familiar en corte láser"
+          title="3. Dedicatoria en corte láser"
           hint={
             <>
-              El <strong className="text-ink">20% de la placa metálica</strong> se corta a la medida con el mensaje que tu familia quiera conservar. Lo verás
+              El <strong className="text-ink">20% de la pieza</strong> se corta en metal a la medida con una dedicatoria especial: un apodo, una frase o algo que le apasionaba. Lo verás
               en la franja punteada de la vista previa.
             </>
           }
@@ -126,7 +157,7 @@ export function Customizer({ product, value, onChange }: Props) {
           <div className="rounded-2xl border border-dashed border-gold/60 bg-gold/5 p-4">
             <div className="flex items-baseline justify-between">
               <label htmlFor="c-laser" className="label">
-                Mensaje láser
+                Dedicatoria
               </label>
               <Counter value={value.laserMessage} max={laserMax} />
             </div>
