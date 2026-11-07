@@ -55,7 +55,7 @@ export default function Catalog() {
       {loading ? (
         <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }, (_, i) => (
-            <div key={i} className="aspect-[5/6] animate-pulse rounded-2xl bg-sand" />
+            <div key={i} className="aspect-[2/3] animate-pulse rounded-2xl bg-sand" />
           ))}
         </div>
       ) : products.length ? (

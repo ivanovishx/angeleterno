@@ -96,6 +96,7 @@ const SAMPLE_PRODUCTS: Array<{
     h: 70,
     shape: 'recto',
     description: 'Parota sólida tratada para exterior, con grabado profundo y sellado contra humedad y rayos UV. Una pieza cálida y natural.',
+    photo: { file: 'raiz-eterna.webp' },
   },
   {
     name: 'Alas de Luz',

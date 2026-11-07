@@ -5,13 +5,14 @@ import { money } from '../lib/format'
 export function ProductCard({ product }: { product: Product }) {
   return (
     <Link to={`/catalogo/${product.slug}`} className="group block">
-      <div className="relative aspect-[5/6] overflow-hidden rounded-2xl bg-sand">
+      {/* Proporción 2:3, la de las fotos de producto; con object-contain la foto se ve completa aunque tenga otra proporción */}
+      <div className="relative aspect-[2/3] overflow-hidden rounded-2xl bg-sand">
         {product.images[0] ? (
           <img
             src={product.images[0]}
             alt={product.name}
             loading="lazy"
-            className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+            className="h-full w-full object-contain transition duration-500 group-hover:scale-[1.03]"
           />
         ) : (
           <div className="grid h-full place-items-center text-stone">Sin imagen</div>
