@@ -54,6 +54,15 @@ Ver `.env.example`:
 | `RESEND_API_KEY`, `EMAIL_FROM` | Envío por correo (Resend, con dominio angeleterno.com verificado). |
 | `VITE_WHATSAPP_NUMBER` | Opcional: número del negocio para el botón flotante de WhatsApp. |
 
+## Despliegue (GitHub Actions + Render)
+
+- `.github/workflows/ci.yml`: en cada push a `master` revisa tipos, compila y arranca el servidor en modo producción
+  para comprobar que responde.
+- `render.yaml`: blueprint de Render. Render despliega solo cuando el CI pasa (`autoDeployTrigger: checksPass`).
+- Plan **gratuito**: sin disco persistente. Cada despliegue o reinicio borra usuarios, pedidos e imágenes subidas
+  y vuelve a cargar el catálogo de ejemplo; además el sitio se duerme tras 15 minutos sin visitas.
+  Para datos permanentes: plan Starter con disco montado (o una base de datos y almacenamiento externos).
+
 ## Producción
 
 ```bash
