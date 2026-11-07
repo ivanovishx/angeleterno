@@ -1,18 +1,8 @@
 import { Link } from 'react-router-dom'
-import { EMPTY_CUSTOMIZATION, type Product } from '../../shared/types'
-import { MemorialPreview } from '../components/MemorialPreview'
+import type { Product } from '../../shared/types'
+import heroImage from '../assets/hero-lapida.webp'
 import { ProductCard } from '../components/ProductCard'
 import { useApi } from '../lib/useApi'
-
-const SAMPLE = {
-  ...EMPTY_CUSTOMIZATION,
-  fullName: 'Rosa María Delgado',
-  birthDate: '1948-03-12',
-  deathDate: '2025-06-02',
-  epitaph: 'Tu amor sigue floreciendo en cada uno de nosotros',
-  laserMessage: 'Te amaremos por siempre. Tus hijos y nietos',
-  symbol: 'paloma' as const,
-}
 
 const STEPS = [
   { n: '01', title: 'Elige tu pieza', text: 'Explora diseños en madera, metal o la combinación de ambos.' },
@@ -64,9 +54,14 @@ export default function Home() {
               </a>
             </div>
           </div>
-          <div className="relative mx-auto w-full max-w-sm">
-            <div className="absolute inset-x-6 bottom-0 top-10 -z-10 rounded-[3rem] bg-sand" />
-            <MemorialPreview product={{ material: 'madera-metal', widthCm: 45, heightCm: 65 }} customization={SAMPLE} className="w-full drop-shadow-xl" />
+          <div className="mx-auto w-full max-w-sm">
+            <img
+              src={heroImage}
+              alt="Lápida de madera con corazón y flores en latón, grabada con el nombre María Fernández López"
+              width={397}
+              height={594}
+              className="w-full rounded-3xl shadow-2xl shadow-ink/25"
+            />
           </div>
         </div>
       </section>
