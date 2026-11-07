@@ -3,20 +3,14 @@ import type { NextFunction, Request, Response } from 'express'
 import { db, toUser } from './db.ts'
 import type { User } from '../shared/types.ts'
 
+// El valor por defecto es público (está en el repositorio): en producción es obligatorio definir uno propio
+if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
+  throw new Error('Falta SESSION_SECRET: defínelo en las variables de entorno del servidor.')
+}
 const SECRET = process.env.SESSION_SECRET ?? 'dev-secret-angeleterno'
 const SESSION_DAYS = 30
 const OTP_MINUTES = 10
 const OTP_MAX_ATTEMPTS = 5
-
-/** Normaliza a formato E.164. Asume México (+52) cuando se dan 10 dígitos. */
-export function normalizePhone(input: string): string | null {
-  const digits = input.replace(/[^\d+]/g, '')
-  if (/^\+\d{10,15}$/.test(digits)) return digits
-  const only = digits.replace(/\D/g, '')
-  if (only.length === 10) return `+52${only}`
-  if (only.length >= 11 && only.length <= 15) return `+${only}`
-  return null
-}
 
 const hashCode = (phone: string, code: string) => createHash('sha256').update(`${phone}:${code}:${SECRET}`).digest('hex')
 

@@ -6,23 +6,11 @@ import { existsSync, unlink, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
 import { db, ROOT, UPLOADS_DIR, toOrder, toProduct, toUser } from './db.ts'
-import { createOtp, loadUser, normalizePhone, requireAdmin, requireUser, signSession, verifyOtp } from './auth.ts'
+import { createOtp, loadUser, requireAdmin, requireUser, signSession, verifyOtp } from './auth.ts'
 import { TEST_PASSWORD, TEST_USER, isTestPhone, testLoginEnabled } from './testLogin.ts'
 import { emailConfigured, sendEmail, sendWhatsApp, whatsappConfigured } from './notify.ts'
-import {
-  EMPTY_CUSTOMIZATION,
-  FONT_LABELS,
-  LIMITS,
-  ORDER_STATUS_LABELS,
-  SYMBOL_LABELS,
-  hasMetal,
-  laserCharLimit,
-  parseZones,
-  type Customization,
-  type Material,
-  type OrderItem,
-  type OrderStatus,
-} from '../shared/types.ts'
+import { ORDER_STATUS_LABELS, laserCharLimit, type OrderItem, type OrderStatus } from '../shared/types.ts'
+import { cleanCustomization, isEmail, normalizePhone, parseProductFields, slugify, str } from '../shared/validation.ts'
 
 const isProd = process.env.NODE_ENV === 'production'
 const app = express()
@@ -42,8 +30,6 @@ const upload = multer({
   fileFilter: (_req, file, cb) => cb(null, /^image\/(jpeg|png|webp|avif|gif|svg\+xml)$/.test(file.mimetype)),
 })
 
-const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
-const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
 
 // ---------- Configuración pública ----------
 app.get('/api/config', (_req, res) => {
@@ -144,15 +130,6 @@ app.get('/api/products/:slug', (req, res) => {
   res.json({ product })
 })
 
-function slugify(text: string) {
-  return text
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-}
-
 function uniqueSlug(name: string, ignoreId?: number) {
   const base = slugify(name) || 'producto'
   let slug = base
@@ -160,30 +137,12 @@ function uniqueSlug(name: string, ignoreId?: number) {
   return slug
 }
 
+/** Campos del formulario de producto, en el formato que guarda SQLite */
 function productFields(req: Request) {
-  const b = req.body as Record<string, string>
-  const material = (['madera', 'metal', 'madera-metal'] as const).includes(b.material as Material) ? (b.material as Material) : null
-  const fields = {
-    name: str(b.name, 120),
-    description: str(b.description, 3000),
-    material,
-    price: Number(b.price),
-    widthCm: Number(b.widthCm),
-    heightCm: Number(b.heightCm),
-    featured: b.featured === 'true' ? 1 : 0,
-    active: b.active === 'false' ? 0 : 1,
-  }
-  if (!fields.name) return { error: 'El nombre es obligatorio.' }
-  if (!material) return { error: 'Selecciona un material.' }
-  if (!(fields.price > 0)) return { error: 'El precio debe ser mayor a 0.' }
-  if (!(fields.widthCm > 0 && fields.heightCm > 0)) return { error: 'Indica las medidas en centímetros.' }
-  let zones = null
-  try {
-    zones = parseZones(JSON.parse(b.zones || 'null'))
-  } catch {
-    return { error: 'Las zonas personalizables no son válidas.' }
-  }
-  return { fields: { ...fields, material, zones: zones && JSON.stringify(zones) } }
+  const parsed = parseProductFields(req.body as Record<string, unknown>)
+  if ('error' in parsed) return parsed
+  const f = parsed.fields
+  return { fields: { ...f, featured: f.featured ? 1 : 0, active: f.active ? 1 : 0, zones: f.zones && JSON.stringify(f.zones) } }
 }
 
 const uploadedPaths = (req: Request) => ((req.files as Express.Multer.File[] | undefined) ?? []).map((f) => `/uploads/${f.filename}`)
@@ -247,28 +206,6 @@ app.delete('/api/admin/products/:id', requireUser, requireAdmin, (req, res) => {
 })
 
 // ---------- Pedidos ----------
-function cleanCustomization(input: unknown, material: Material, limit: number): Customization {
-  const c = (input ?? {}) as Record<string, unknown>
-  return {
-    fullName: str(c.fullName, LIMITS.fullName),
-    birthDate: str(c.birthDate, 10),
-    deathDate: str(c.deathDate, 10),
-    epitaph: str(c.epitaph, LIMITS.epitaph),
-    placement: c.placement === 'cuerpo' ? 'cuerpo' : 'placa',
-    laserMessage: hasMetal(material) ? str(c.laserMessage, limit) : '',
-    font: c.font && String(c.font) in FONT_LABELS ? (c.font as Customization['font']) : EMPTY_CUSTOMIZATION.font,
-    symbol: c.symbol && String(c.symbol) in SYMBOL_LABELS ? (c.symbol as Customization['symbol']) : EMPTY_CUSTOMIZATION.symbol,
-    notes: str(c.notes, LIMITS.notes),
-    customImage: '',
-    imageScale: clamp(Number(c.imageScale), 0.2, 3, 1),
-    imageX: clamp(Number(c.imageX), -1, 1, 0),
-    imageY: clamp(Number(c.imageY), -1, 1, 0),
-    imageKnockout: c.imageKnockout === true,
-  }
-}
-
-const clamp = (n: number, min: number, max: number, fallback: number) => (Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback)
-
 const IMAGE_SIGNATURES: Array<[string, (b: Buffer) => boolean]> = [
   ['png', (b) => b.subarray(0, 4).toString('hex') === '89504e47'],
   ['jpg', (b) => b.subarray(0, 3).toString('hex') === 'ffd8ff'],

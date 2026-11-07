@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import type { OtpChannel, User } from '../../shared/types'
 import { Wings } from '../components/Logo'
-import { api } from '../lib/api'
+import { DEMO, api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
 type Mode = 'login' | 'register'
@@ -160,7 +160,8 @@ export default function Login() {
               </p>
               {sent.devCode && (
                 <p className="rounded-xl bg-gold/10 px-4 py-3 text-sm text-ink-soft">
-                  Modo desarrollo (sin proveedor configurado): tu código es <strong className="tracking-widest">{sent.devCode}</strong>
+                  {DEMO ? 'Versión demo, sin envío real de mensajes' : 'Modo desarrollo (sin proveedor configurado)'}: tu código es{' '}
+                  <strong className="tracking-widest">{sent.devCode}</strong>
                 </p>
               )}
               <input

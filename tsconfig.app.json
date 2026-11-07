@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2023",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
@@ -11,9 +15,15 @@
     "isolatedModules": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "types": ["vite/client"],
+    "types": [
+      "vite/client"
+    ],
     "composite": true,
-    "tsBuildInfoFile": "./node_modules/.tmp/app.tsbuildinfo"
+    "tsBuildInfoFile": "./node_modules/.tmp/app.tsbuildinfo",
+    "allowImportingTsExtensions": true
   },
-  "include": ["src", "shared"]
+  "include": [
+    "src",
+    "shared"
+  ]
 }

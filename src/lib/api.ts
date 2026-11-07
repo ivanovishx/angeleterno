@@ -27,7 +27,11 @@ export class ApiError extends Error {
   }
 }
 
+/** Versión demo para GitHub Pages: sin servidor, los datos viven en el navegador (ver demoApi.ts) */
+export const DEMO = import.meta.env.VITE_DEMO === 'true'
+
 export async function api<T>(path: string, options: RequestInit & { json?: unknown } = {}): Promise<T> {
+  if (DEMO) return (await import('./demoApi')).demoRequest<T>(path, options)
   const { json, headers, ...rest } = options
   const token = tokenStore.get()
   const res = await fetch(`/api${path}`, {

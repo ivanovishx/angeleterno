@@ -54,14 +54,19 @@ Ver `.env.example`:
 | `RESEND_API_KEY`, `EMAIL_FROM` | Envío por correo (Resend, con dominio angeleterno.com verificado). |
 | `VITE_WHATSAPP_NUMBER` | Opcional: número del negocio para el botón flotante de WhatsApp. |
 
-## Despliegue (GitHub Actions + Render)
+## Despliegue (GitHub Actions + GitHub Pages)
 
-- `.github/workflows/ci.yml`: en cada push a `master` revisa tipos, compila y arranca el servidor en modo producción
-  para comprobar que responde.
-- `render.yaml`: blueprint de Render. Render despliega solo cuando el CI pasa (`autoDeployTrigger: checksPass`).
-- Plan **gratuito**: sin disco persistente. Cada despliegue o reinicio borra usuarios, pedidos e imágenes subidas
-  y vuelve a cargar el catálogo de ejemplo; además el sitio se duerme tras 15 minutos sin visitas.
-  Para datos permanentes: plan Starter con disco montado (o una base de datos y almacenamiento externos).
+`.github/workflows/ci.yml` corre en cada push a `master`:
+
+1. **Verificación**: tipos, build y arranque del servidor en modo producción.
+2. **Publicación** (si la verificación pasa): compila la **versión demo** y la publica en GitHub Pages.
+
+La versión demo funciona sin servidor (GitHub Pages solo sirve archivos estáticos): el catálogo de ejemplo viaja
+con el sitio y las cuentas, pedidos y cambios del dashboard se guardan en el navegador de cada visitante
+(`src/lib/demoApi.ts`). Los códigos de acceso se muestran en pantalla. Para que los datos sean compartidos y
+permanentes hay que publicar el servidor completo (ver "Producción").
+
+Para generarla localmente: `npm run build:demo` (sale en `dist/`).
 
 ## Producción
 

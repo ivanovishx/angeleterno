@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { DEMO } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useCart } from '../lib/cart'
 import { Logo } from './Logo'
@@ -43,6 +44,11 @@ export function Layout() {
 
   return (
     <div className="flex min-h-dvh flex-col">
+      {DEMO && (
+        <p className="bg-gold px-4 py-1.5 text-center text-xs text-white">
+          Versión demo: tus cuentas, pedidos y cambios se guardan solo en este navegador.
+        </p>
+      )}
       <header className="sticky top-0 z-40 border-b border-ink/10 bg-paper/90 backdrop-blur">
         <div className="container-page flex h-16 items-center justify-between gap-4">
           <Link to="/" aria-label="Ángel Eterno, inicio">
