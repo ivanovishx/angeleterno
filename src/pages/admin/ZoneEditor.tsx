@@ -1,5 +1,5 @@
 import { useRef, useState, type PointerEvent } from 'react'
-import type { ProductZones, ZonePoint, ZoneRect } from '../../../shared/types'
+import { ENGRAVING_INKS, TEXT_ZONE_STYLES, type ProductZones, type TextZoneStyle, type ZonePoint, type ZoneRect } from '../../../shared/types'
 
 type Mode = 'none' | 'image' | 'plaque'
 
@@ -67,7 +67,8 @@ export function ZoneEditor({ src, zones, onChange }: Props) {
 
   const onPointerUp = () => {
     if (mode !== 'plaque' || !rectDraft) return
-    if (rectDraft.w > 0.02 && rectDraft.h > 0.02) save({ plaque: rectDraft })
+    // Al redibujar se conservan el estilo y el color elegidos
+    if (rectDraft.w > 0.02 && rectDraft.h > 0.02) save({ plaque: { ...zones?.plaque, ...rectDraft } })
     setRectStart(null)
     start('none')
   }
@@ -83,7 +84,7 @@ export function ZoneEditor({ src, zones, onChange }: Props) {
           {zones?.image ? 'Redibujar zona de imagen' : 'Marcar zona de imagen'}
         </button>
         <button type="button" onClick={() => start(mode === 'plaque' ? 'none' : 'plaque')} className={`rounded-full px-4 py-2 ${mode === 'plaque' ? 'bg-ink text-paper' : 'bg-white ring-1 ring-ink/15'}`}>
-          {zones?.plaque ? 'Redibujar placa' : 'Marcar placa'}
+          {zones?.plaque ? 'Redibujar zona de texto' : 'Marcar zona de texto'}
         </button>
       </div>
 
@@ -91,7 +92,7 @@ export function ZoneEditor({ src, zones, onChange }: Props) {
         {mode === 'image'
           ? 'Toca punto por punto el contorno del área donde el cliente puede poner su imagen. Toca el primer punto o "Cerrar zona" para terminar.'
           : mode === 'plaque'
-            ? 'Arrastra un rectángulo sobre el texto de la placa (nombre, fechas y mensaje). Cubre todo el texto original.'
+            ? 'Arrastra un rectángulo que cubra todo el texto original de la foto (nombre, fechas y mensaje), con un pequeño margen.'
             : 'Solo estas áreas se podrán personalizar; el resto de la foto se queda como está.'}
       </p>
 
@@ -146,10 +147,55 @@ export function ZoneEditor({ src, zones, onChange }: Props) {
         )}
         {mode === 'none' && zones?.plaque && (
           <button type="button" className="px-2 py-1 text-red-700 hover:underline" onClick={() => save({ plaque: null })}>
-            Quitar placa
+            Quitar zona de texto
           </button>
         )}
       </div>
+
+      {mode === 'none' && zones?.plaque && (
+        <div className="space-y-3 rounded-xl bg-white p-4 ring-1 ring-ink/10">
+          <div>
+            <p className="label">Estilo del texto</p>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              {(Object.keys(TEXT_ZONE_STYLES) as TextZoneStyle[]).map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => save({ plaque: { ...zones.plaque!, style: st, ink: st === 'placa' ? undefined : (zones.plaque!.ink ?? ENGRAVING_INKS[0].value) } })}
+                  className={`rounded-xl border px-3 py-2.5 transition ${
+                    (zones.plaque!.style ?? 'placa') === st ? 'border-gold bg-gold/10 font-medium ring-2 ring-gold/25' : 'border-ink/15'
+                  }`}
+                >
+                  {TEXT_ZONE_STYLES[st]}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1.5 text-xs text-stone">
+              {zones.plaque.style === 'grabado'
+                ? 'Se borra el texto original de la foto y el nuevo se escribe sobre la madera o el metal.'
+                : 'El texto va sobre una placa de latón dibujada encima de la foto.'}
+            </p>
+          </div>
+          {zones.plaque.style === 'grabado' && (
+            <div>
+              <p className="label">Color del grabado</p>
+              <div className="flex flex-wrap gap-2">
+                {ENGRAVING_INKS.map((ink) => (
+                  <button
+                    key={ink.value}
+                    type="button"
+                    onClick={() => save({ plaque: { ...zones.plaque!, ink: ink.value } })}
+                    className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${zones.plaque!.ink === ink.value ? 'border-gold ring-2 ring-gold/25' : 'border-ink/15'}`}
+                  >
+                    <span className="h-4 w-4 rounded-full ring-1 ring-ink/20" style={{ background: ink.value }} />
+                    {ink.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

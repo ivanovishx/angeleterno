@@ -9,11 +9,30 @@ export const MATERIAL_LABELS: Record<Material, string> = {
 /** Punto normalizado (0–1) sobre la foto principal del producto */
 export type ZonePoint = [number, number]
 
+export type TextZoneStyle = 'placa' | 'grabado'
+
+export const TEXT_ZONE_STYLES: Record<TextZoneStyle, string> = {
+  placa: 'Placa de latón',
+  grabado: 'Grabado sobre la pieza',
+}
+
+/** Colores del texto según el acabado del grabado */
+export const ENGRAVING_INKS = [
+  { value: '#e6cf9a', label: 'Dorado' },
+  { value: '#e2e2df', label: 'Plateado' },
+  { value: '#f5f1e8', label: 'Blanco' },
+  { value: '#2a1708', label: 'Oscuro' },
+] as const
+
 export interface ZoneRect {
   x: number
   y: number
   w: number
   h: number
+  /** Cómo se ve el texto: placa sobrepuesta (por defecto) o grabado sobre la pieza */
+  style?: TextZoneStyle
+  /** Color del texto (hex) */
+  ink?: string
 }
 
 /**
@@ -23,7 +42,7 @@ export interface ZoneRect {
 export interface ProductZones {
   /** Polígono donde el cliente puede poner una imagen propia (opcional) */
   image: ZonePoint[] | null
-  /** Rectángulo de la placa donde van nombre, fechas y mensaje */
+  /** Zona de texto (placa o grabado) donde van nombre, fechas y mensaje */
   plaque: ZoneRect | null
 }
 
@@ -42,7 +61,14 @@ export function parseZones(input: unknown): ProductZones | null {
   const r = z.plaque as Record<string, unknown> | null
   const plaque =
     r && unit(r.x) && unit(r.y) && unit(r.w) && unit(r.h) && (r.w as number) > 0.02 && (r.h as number) > 0.02
-      ? { x: round(r.x as number), y: round(r.y as number), w: round(r.w as number), h: round(r.h as number) }
+      ? {
+          x: round(r.x as number),
+          y: round(r.y as number),
+          w: round(r.w as number),
+          h: round(r.h as number),
+          ...(r.style === 'grabado' && { style: 'grabado' as const }),
+          ...(typeof r.ink === 'string' && /^#[0-9a-f]{6}$/i.test(r.ink) && { ink: r.ink.toLowerCase() }),
+        }
       : null
   return image || plaque ? { image, plaque } : null
 }

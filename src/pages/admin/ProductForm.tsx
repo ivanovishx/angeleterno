@@ -169,9 +169,13 @@ export default function ProductForm() {
           {mainImage ? (
             <>
               <p className="text-sm text-stone">
-                Se marcan sobre la foto principal. Si cambias la foto principal, vuelve a revisar las zonas. Sin zonas, la vista previa usa la ilustración
-                genérica.
+                Se marcan sobre la foto principal. Si cambias la foto principal, vuelve a revisar las zonas.
               </p>
+              {!zones?.plaque && (
+                <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+                  Marca la zona de texto para que el cliente vea su nombre, fechas y mensaje sobre la foto mientras personaliza.
+                </p>
+              )}
               <ZoneEditor src={mainImage} zones={zones} onChange={setZones} />
             </>
           ) : (

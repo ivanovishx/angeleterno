@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type PointerEvent } from 'react'
 import type { Customization } from '../../shared/types'
 import { CHAR_WIDTH, FONT_FAMILY, fullDate, wrap } from '../lib/inscription'
+import { yearOf } from '../lib/format'
 import type { PreviewProduct } from './MemorialPreview'
 
 function useImageSize(src: string | undefined) {
@@ -16,6 +17,23 @@ function useImageSize(src: string | undefined) {
     }
   }, [src])
   return size
+}
+
+/** Parte un nombre largo en dos renglones lo más parejos posible, como en las lápidas grabadas */
+function splitName(name: string) {
+  const words = name.trim().split(/\s+/)
+  if (words.length < 2 || name.length <= 14) return [name]
+  let best = [name]
+  let bestLen = Infinity
+  for (let i = 1; i < words.length; i++) {
+    const a = words.slice(0, i).join(' ')
+    const b = words.slice(i).join(' ')
+    if (Math.max(a.length, b.length) < bestLen) {
+      bestLen = Math.max(a.length, b.length)
+      best = [a, b]
+    }
+  }
+  return best
 }
 
 function centroid(pts: ReadonlyArray<readonly [number, number]>) {
@@ -91,33 +109,54 @@ export function PhotoPreview({ product, customization: c, className = '', editab
   const pq = zones.plaque && { x: zones.plaque.x * W, y: zones.plaque.y * H, w: zones.plaque.w * W, h: zones.plaque.h * H }
   const font = FONT_FAMILY[c.font]
   const script = c.font === 'caligrafica'
-  const feather = pq ? Math.min(pq.w, pq.h) * 0.035 : 0
+  // Borde difuminado de la zona; en el grabado es más angosto para que no se asome el texto original
+  const feather = pq ? Math.min(pq.w, pq.h) * (zones.plaque?.style === 'grabado' ? 0.02 : 0.035) : 0
   const inner = pq && { x: pq.x + feather * 2, y: pq.y + feather * 2, w: pq.w - feather * 4, h: pq.h - feather * 4 }
 
-  const name = c.fullName || 'Nombre completo'
-  const nameSize = inner ? Math.min(inner.h * (script ? 0.3 : 0.23), (inner.w * 0.95) / (name.length * CHAR_WIDTH[c.font])) : 0
-  const dateSize = inner ? inner.h * 0.135 : 0
-  const msgSize = inner ? inner.h * (script ? 0.15 : 0.105) : 0
-  const msgChars = inner ? Math.floor((inner.w * 0.95) / (msgSize * (script ? 0.42 : 0.5))) : 40
-  const msgLines = wrap(c.epitaph || 'Mensaje de la familia', msgChars, 2)
-  const dates = [fullDate(c.birthDate) || 'Fecha de nacimiento', fullDate(c.deathDate) || 'Fecha de fallecimiento']
+  // "placa": placa de latón sobrepuesta (texto oscuro). "grabado": texto grabado sobre la pieza (madera o metal),
+  // se borra el texto original de la foto y se escribe el nuevo con el color del grabado.
+  const engraved = zones.plaque?.style === 'grabado'
+  // La foto se muestra intacta hasta que el cliente empieza a escribir
+  const started = Boolean(c.fullName || c.birthDate || c.deathDate || c.epitaph)
+  const ink = zones.plaque?.ink ?? (engraved ? '#eadcc0' : '#2a1708')
 
-  let layout: { nameY: number; dateY: number[]; dividerY: number; msgY: number[] } | null = null
+  const name = c.fullName || 'Nombre completo'
+  const nameLines = engraved ? splitName(name) : [name]
+  const longest = Math.max(...nameLines.map((l) => l.length))
+  const nameSize = inner
+    ? Math.min(inner.h * (engraved ? (script ? 0.21 : 0.15) : script ? 0.3 : 0.23), (inner.w * 0.95) / (longest * CHAR_WIDTH[c.font]))
+    : 0
+  const dateSize = inner ? inner.h * (engraved ? 0.085 : 0.135) : 0
+  const msgSize = inner ? inner.h * (engraved ? (script ? 0.1 : 0.07) : script ? 0.15 : 0.105) : 0
+  const msgChars = inner ? Math.floor((inner.w * 0.95) / (msgSize * (script ? 0.42 : 0.5))) : 40
+  const msgLines = wrap(c.epitaph || 'Mensaje de la familia', msgChars, engraved ? 3 : 2)
+  const hasDates = Boolean(c.birthDate || c.deathDate)
+  const dates = engraved
+    ? [hasDates ? `${yearOf(c.birthDate) || '····'} - ${yearOf(c.deathDate) || '····'}` : 'Año - Año']
+    : [fullDate(c.birthDate) || 'Fecha de nacimiento', fullDate(c.deathDate) || 'Fecha de fallecimiento']
+  const dateFilled = (i: number) => (engraved ? hasDates : Boolean(i === 0 ? c.birthDate : c.deathDate))
+
+  let layout: { nameY: number[]; dateY: number[]; dividerY: number; msgY: number[] } | null = null
   if (inner) {
     const gap = inner.h * 0.04
-    const blockH = nameSize + gap + dateSize * 2.2 + gap * 2.5 + msgLines.length * msgSize * 1.25
+    const nameBlock = nameLines.length * nameSize * 1.12
+    const dateBlock = dates.length * dateSize * 1.12
+    const blockH = nameBlock + gap + dateBlock + gap * 2.5 + msgLines.length * msgSize * 1.28
     let y = inner.y + (inner.h - blockH) / 2
-    const nameY = y + nameSize * 0.8
-    y += nameSize + gap
-    const dateY = [y + dateSize * 0.85, y + dateSize * 1.95]
-    y += dateSize * 2.2 + gap * 1.25
+    const nameY = nameLines.map((_, i) => y + nameSize * 0.85 + i * nameSize * 1.12)
+    y += nameBlock + gap
+    const dateY = dates.map((_, i) => y + dateSize * 0.85 + i * dateSize * 1.12)
+    y += dateBlock + gap * 1.25
     const dividerY = y
     y += gap * 1.25
-    layout = { nameY, dateY, dividerY, msgY: msgLines.map((_, i) => y + msgSize * 0.9 + i * msgSize * 1.25) }
+    layout = { nameY, dateY, dividerY, msgY: msgLines.map((_, i) => y + msgSize * 0.9 + i * msgSize * 1.28) }
   }
 
-  const ink = '#2a1708'
   const cx = pq ? pq.x + pq.w / 2 : 0
+  const diamond = inner ? Math.max(6, inner.w * 0.018) : 0
+  // Margen del filtro que borra el texto original, para que el desenfoque tome pixeles reales alrededor de la zona
+  const eraseMargin = 40
+  const textShadow = engraved ? { stroke: '#000', strokeOpacity: 0.35, strokeWidth: nameSize * 0.05, paintOrder: 'stroke' as const } : {}
 
   return (
     <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className={className} role="img" aria-label="Vista previa de la lápida personalizada">
@@ -161,6 +200,28 @@ export function PhotoPreview({ product, customization: c, className = '', editab
             <filter id={id('feather')} x="-30%" y="-30%" width="160%" height="160%">
               <feGaussianBlur stdDeviation={feather} />
             </filter>
+            {engraved && (
+              <filter
+                id={id('erase')}
+                filterUnits="userSpaceOnUse"
+                x={pq!.x - eraseMargin}
+                y={pq!.y - eraseMargin}
+                width={pq!.w + eraseMargin * 2}
+                height={pq!.h + eraseMargin * 2}
+                colorInterpolationFilters="sRGB"
+              >
+                {/* 1. Apertura y cierre morfológicos: atenúan los trazos delgados claros (letras) y oscuros (su sombra) */}
+                <feMorphology operator="erode" radius="3" />
+                <feMorphology operator="dilate" radius="6" />
+                <feMorphology operator="erode" radius="3" />
+                {/* 2. Desenfoque: borra lo que quede del texto original */}
+                <feGaussianBlur stdDeviation="9" result="smooth" />
+                {/* 3. Veta vertical sintética para que el parche no se vea liso */}
+                <feTurbulence type="fractalNoise" baseFrequency="0.11 0.005" numOctaves="2" seed="7" result="noise" />
+                <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1.3 0 0 0 -0.52" result="grain" />
+                <feComposite in="grain" in2="smooth" operator="over" />
+              </filter>
+            )}
             <mask id={id('plaqueMask')} maskUnits="userSpaceOnUse" x="0" y="0" width={W} height={H}>
               <rect x={pq!.x + feather} y={pq!.y + feather} width={pq!.w - feather * 2} height={pq!.h - feather * 2} rx={feather} fill="#fff" filter={url('feather')} />
             </mask>
@@ -192,31 +253,62 @@ export function PhotoPreview({ product, customization: c, className = '', editab
         </g>
       )}
 
-      {/* Zona 2: placa con nombre, fechas y mensaje */}
-      {inner && layout && (
+      {/* Zona 2: nombre, fechas y mensaje (placa sobrepuesta o grabado sobre la pieza) */}
+      {inner && layout && started && (
         <g>
-          <rect x={pq!.x} y={pq!.y} width={pq!.w} height={pq!.h} fill={url('brass')} mask={url('plaqueMask')} />
+          {engraved ? (
+            <image href={photo} width={W} height={H} preserveAspectRatio="none" filter={url('erase')} mask={url('plaqueMask')} />
+          ) : (
+            <rect x={pq!.x} y={pq!.y} width={pq!.w} height={pq!.h} fill={url('brass')} mask={url('plaqueMask')} />
+          )}
           <g textAnchor="middle" fill={ink}>
-            <text x={cx} y={layout.nameY} fontSize={nameSize} fontWeight={script ? 400 : 700} style={{ fontFamily: font }} opacity={c.fullName ? 1 : 0.45}>
-              {name}
-            </text>
+            {nameLines.map((l, i) => (
+              <text
+                key={i}
+                x={cx}
+                y={layout!.nameY[i]}
+                fontSize={nameSize}
+                fontWeight={script ? 400 : engraved ? 500 : 700}
+                style={{ fontFamily: font }}
+                opacity={c.fullName ? 1 : 0.45}
+                {...textShadow}
+              >
+                {l}
+              </text>
+            ))}
             {dates.map((d, i) => (
               <text
                 key={i}
                 x={cx}
                 y={layout!.dateY[i]}
                 fontSize={dateSize}
-                fontWeight="700"
+                fontWeight={engraved ? 500 : 700}
+                letterSpacing={engraved ? dateSize * 0.08 : undefined}
                 style={{ fontFamily: FONT_FAMILY[script ? 'clasica' : c.font] }}
-                opacity={(i === 0 ? c.birthDate : c.deathDate) ? 1 : 0.45}
+                opacity={dateFilled(i) ? 1 : 0.45}
+                {...textShadow}
               >
                 {d}
               </text>
             ))}
-            <path d={`M${cx - inner.w * 0.32} ${layout.dividerY}H${cx - 10}M${cx + 10} ${layout.dividerY}H${cx + inner.w * 0.32}`} stroke={ink} strokeWidth="1.6" />
-            <rect x={cx - 6} y={layout.dividerY - 6} width="12" height="12" transform={`rotate(45 ${cx} ${layout.dividerY})`} />
+            <path
+              d={`M${cx - inner.w * 0.32} ${layout.dividerY}H${cx - diamond * 1.5}M${cx + diamond * 1.5} ${layout.dividerY}H${cx + inner.w * 0.32}`}
+              stroke={ink}
+              strokeWidth={engraved ? 1.2 : 1.6}
+            />
+            <rect x={cx - diamond / 2} y={layout.dividerY - diamond / 2} width={diamond} height={diamond} transform={`rotate(45 ${cx} ${layout.dividerY})`} />
             {msgLines.map((l, i) => (
-              <text key={i} x={cx} y={layout!.msgY[i]} fontSize={msgSize} fontWeight={script ? 400 : 700} style={{ fontFamily: font }} opacity={c.epitaph ? 1 : 0.45}>
+              <text
+                key={i}
+                x={cx}
+                y={layout!.msgY[i]}
+                fontSize={msgSize}
+                fontWeight={script ? 400 : engraved ? 500 : 700}
+                letterSpacing={engraved && !script ? msgSize * 0.06 : undefined}
+                style={{ fontFamily: font }}
+                opacity={c.epitaph ? 1 : 0.45}
+                {...textShadow}
+              >
                 {l}
               </text>
             ))}

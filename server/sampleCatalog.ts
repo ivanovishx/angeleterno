@@ -60,6 +60,14 @@ const ALAS_DE_LUZ_ZONES: ProductZones = {
   plaque: { x: 0.239, y: 0.74, w: 0.54, h: 0.142 },
 }
 
+/** Zona de texto grabado sobre la pieza (nombre, años y mensaje), calibrada sobre cada foto */
+const engraved = (x: number, y: number, w: number, h: number, ink: string): ProductZones => ({
+  image: null,
+  plaque: { x, y, w, h, style: 'grabado', ink },
+})
+const SILVER = '#e2e2df'
+const GOLD = '#e6cf9a'
+
 const SAMPLE_PRODUCTS: Array<{
   name: string
   material: Material
@@ -86,7 +94,7 @@ const SAMPLE_PRODUCTS: Array<{
     shape: 'arco',
     featured: true,
     description: 'Placa de acero al carbón con acabado negro mate y corte láser de alta precisión. Arco superior inspirado en la calma del atardecer.',
-    photo: { file: 'serenidad.webp' },
+    photo: { file: 'serenidad.webp', zones: engraved(0.395, 0.245, 0.385, 0.205, SILVER) },
   },
   {
     name: 'Raíz Eterna',
@@ -96,7 +104,7 @@ const SAMPLE_PRODUCTS: Array<{
     h: 70,
     shape: 'recto',
     description: 'Parota sólida tratada para exterior, con grabado profundo y sellado contra humedad y rayos UV. Una pieza cálida y natural.',
-    photo: { file: 'raiz-eterna.webp' },
+    photo: { file: 'raiz-eterna.webp', zones: engraved(0.512, 0.356, 0.23, 0.101, GOLD) },
   },
   {
     name: 'Alas de Luz',
@@ -127,7 +135,7 @@ const SAMPLE_PRODUCTS: Array<{
     h: 90,
     shape: 'cruz',
     description: 'Cruz contemporánea de madera de roble con aristas suavizadas y grabado de nombre y fechas.',
-    photo: { file: 'roble-memorial.webp' },
+    photo: { file: 'roble-memorial.webp', zones: engraved(0.4, 0.245, 0.4, 0.225, SILVER) },
   },
   {
     name: 'Constelación',
@@ -138,7 +146,7 @@ const SAMPLE_PRODUCTS: Array<{
     shape: 'recto',
     featured: true,
     description: 'Lápida de madera con inserto metálico de estrellas cortadas en láser, para recordar que siempre hay una luz que nos guía.',
-    photo: { file: 'constelacion.webp', replaceIllustration: true },
+    photo: { file: 'constelacion.webp', zones: engraved(0.52, 0.3, 0.34, 0.285, GOLD), replaceIllustration: true },
   },
 ]
 

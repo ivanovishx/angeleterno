@@ -10,7 +10,10 @@ React + TypeScript (Vite, Tailwind) en el frontend y Express + SQLite (`node:sql
   En piezas con metal, el **20% del área de la placa** se reserva para un mensaje familiar en corte láser;
   el límite de caracteres se calcula según las medidas de cada producto (`shared/types.ts → laserCharLimit`).
 - **Zonas personalizables sobre la foto real**: en el dashboard se marcan sobre la foto principal de cada producto
-  el área donde el cliente puede poner su propia imagen (polígono) y la placa con nombre, fechas y mensaje (rectángulo).
+  el área donde el cliente puede poner su propia imagen (polígono) y la zona de texto con nombre, fechas y mensaje
+  (rectángulo). La zona de texto puede ser una **placa de latón** sobrepuesta o **grabado sobre la pieza**: en ese caso
+  se borra el texto original de la foto con un filtro y se escribe el nuevo en el color elegido (dorado, plateado…).
+  La foto se ve intacta hasta que el cliente empieza a escribir.
   La vista previa muestra la foto tal cual y solo cambia esas zonas; la imagen del cliente se ve en tono latón,
   como quedaría en corte láser, y se guarda con el pedido. Productos sin zonas usan la ilustración genérica.
 - **Cuentas sin contraseña**: registro con número de WhatsApp; el código de acceso llega por WhatsApp o correo.

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { EMPTY_CUSTOMIZATION, MATERIAL_LABELS, hasMetal, type Customization, type Product } from '../../shared/types'
+import { EMPTY_CUSTOMIZATION, MATERIAL_LABELS, hasMetal, hasZones, type Customization, type Product } from '../../shared/types'
 import { Customizer } from '../components/Customizer'
 import { MemorialPreview } from '../components/MemorialPreview'
 import { useCart } from '../lib/cart'
@@ -11,7 +11,8 @@ export default function ProductPage() {
   const { slug } = useParams()
   const { data, loading, error } = useApi<{ product: Product }>(`/products/${slug}`)
   const [customization, setCustomization] = useState<Customization>(EMPTY_CUSTOMIZATION)
-  const [view, setView] = useState<'preview' | number>('preview')
+  // null: vista inicial según el producto (ver `shown` abajo)
+  const [view, setView] = useState<'preview' | number | null>(null)
   const [missingName, setMissingName] = useState(false)
   const cart = useCart()
   const navigate = useNavigate()
@@ -28,6 +29,11 @@ export default function ProductPage() {
     )
 
   const p = data.product
+  // Con zonas marcadas, "Tu diseño" es la foto con la personalización encima. Si el producto tiene foto pero aún
+  // no tiene zonas, se muestra la foto; la ilustración genérica solo se usa cuando no hay foto.
+  const hasPhoto = Boolean(p.images[0] && !p.images[0].endsWith('.svg'))
+  const livePreview = hasZones(p) || !hasPhoto
+  const shown = view ?? (livePreview ? 'preview' : 0)
   const addToCart = () => {
     if (!customization.fullName.trim()) {
       setMissingName(true)
@@ -47,7 +53,7 @@ export default function ProductPage() {
         {/* Vista previa: fija en escritorio para ver los cambios mientras se escribe */}
         <div className="md:sticky md:top-24 md:self-start">
           <div className="rounded-3xl bg-sand p-6">
-            {view === 'preview' ? (
+            {shown === 'preview' ? (
               <MemorialPreview
                 product={p}
                 customization={customization}
@@ -56,18 +62,18 @@ export default function ProductPage() {
                 onImageMove={(imageX, imageY) => setCustomization((c) => ({ ...c, imageX, imageY }))}
               />
             ) : (
-              <img src={p.images[view]} alt={p.name} className="mx-auto max-h-[60vh] w-full rounded-2xl object-contain" />
+              <img src={p.images[shown]} alt={p.name} className="mx-auto max-h-[70vh] w-full rounded-2xl object-contain" />
             )}
           </div>
           <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
             <button
               onClick={() => setView('preview')}
-              className={`shrink-0 rounded-xl px-4 py-2 text-sm ${view === 'preview' ? 'bg-ink text-paper' : 'bg-white ring-1 ring-ink/10'}`}
+              className={`shrink-0 rounded-xl px-4 py-2 text-sm ${shown === 'preview' ? 'bg-ink text-paper' : 'bg-white ring-1 ring-ink/10'}`}
             >
               Tu diseño
             </button>
             {p.images.map((img, i) => (
-              <button key={img} onClick={() => setView(i)} className={`h-14 w-14 shrink-0 overflow-hidden rounded-xl ring-2 ${view === i ? 'ring-gold' : 'ring-transparent'}`}>
+              <button key={img} onClick={() => setView(i)} className={`h-14 w-14 shrink-0 overflow-hidden rounded-xl ring-2 ${shown === i ? 'ring-gold' : 'ring-transparent'}`}>
                 <img src={img} alt="" className="h-full w-full object-cover" />
               </button>
             ))}
@@ -101,7 +107,7 @@ export default function ProductPage() {
               onChange={(c) => {
                 setCustomization(c)
                 if (c.fullName.trim()) setMissingName(false)
-                setView('preview')
+                if (livePreview) setView('preview')
               }}
             />
             {missingName && <p className="mt-4 text-sm text-red-700">Escribe el nombre que irá grabado para continuar.</p>}

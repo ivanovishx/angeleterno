@@ -29,6 +29,7 @@ export default function AdminProducts() {
                   {!p.active && <span className="rounded-full bg-stone-200 px-2 py-0.5">Oculto</span>}
                   {p.featured && <span className="rounded-full bg-gold/15 px-2 py-0.5 text-gold">Destacado</span>}
                   <span className="rounded-full bg-sand px-2 py-0.5">{p.images.length} fotos</span>
+                  {p.images[0] && !p.images[0].endsWith('.svg') && !p.zones?.plaque && <span className="rounded-full bg-red-50 px-2 py-0.5 text-red-700">Sin zona de texto</span>}
                 </div>
               </div>
             </Link>
