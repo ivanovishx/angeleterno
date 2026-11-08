@@ -6,6 +6,7 @@ import { MemorialPreview } from '../components/MemorialPreview'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useCart } from '../lib/cart'
+import { renderDesignImage } from '../lib/designImage'
 import { money } from '../lib/format'
 
 export default function Cart() {
@@ -27,6 +28,12 @@ export default function Cart() {
       </div>
     )
 
+  // Imagen del diseño final de cada pieza, a partir de su vista previa en el carrito; se guarda con el pedido
+  const designOf = async (key: string) => {
+    const svg = document.querySelector<SVGSVGElement>(`[data-design="${key}"] svg`)
+    return svg ? renderDesignImage(svg).catch(() => '') : ''
+  }
+
   const placeOrder = async () => {
     setError(null)
     setBusy(true)
@@ -35,7 +42,14 @@ export default function Cart() {
         method: 'POST',
         json: {
           shippingAddress: address,
-          items: cart.items.map((i) => ({ productId: i.product.id, quantity: i.quantity, customization: i.customization })),
+          items: await Promise.all(
+            cart.items.map(async (i) => ({
+              productId: i.product.id,
+              quantity: i.quantity,
+              customization: i.customization,
+              designImage: await designOf(i.key),
+            })),
+          ),
         },
       })
       cart.clear()
@@ -53,7 +67,7 @@ export default function Cart() {
         <ul className="space-y-4">
           {cart.items.map((item) => (
             <li key={item.key} className="card flex flex-col gap-5 p-4 sm:flex-row sm:p-5">
-              <div className="mx-auto w-32 shrink-0 rounded-xl bg-sand p-2 sm:mx-0">
+              <div className="mx-auto w-32 shrink-0 rounded-xl bg-sand p-2 sm:mx-0" data-design={item.key}>
                 <MemorialPreview product={item.product} customization={item.customization} className="w-full" />
               </div>
               <div className="min-w-0 flex-1 space-y-3">

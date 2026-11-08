@@ -92,7 +92,34 @@ export interface Product {
   createdAt: string
 }
 
-export type FontStyle = 'clasica' | 'caligrafica' | 'moderna'
+interface FontDef {
+  label: string
+  /** Familia en Google Fonts */
+  family: string
+  fallback: string
+  /** Pesos que se cargan (para el sitio y para incrustarlos en la imagen descargable) */
+  weights: number[]
+  /** Ancho promedio de un carácter respecto al tamaño de letra, para ajustar el nombre al espacio */
+  width: number
+  /** Letra manuscrita: se dibuja más grande para que se lea igual */
+  script: boolean
+}
+
+/** Tipografías disponibles para el grabado (máximo 10) */
+export const FONTS = {
+  clasica: { label: 'Clásica', family: 'Cormorant Garamond', fallback: 'Georgia, serif', weights: [400, 500, 700], width: 0.56, script: false },
+  romana: { label: 'Romana', family: 'Cinzel', fallback: 'Georgia, serif', weights: [400, 500, 700], width: 0.72, script: false },
+  elegante: { label: 'Elegante', family: 'Playfair Display', fallback: 'Georgia, serif', weights: [400, 500, 700], width: 0.6, script: false },
+  tradicional: { label: 'Tradicional', family: 'Libre Baskerville', fallback: 'Georgia, serif', weights: [400, 700], width: 0.66, script: false },
+  caligrafica: { label: 'Caligráfica', family: 'Great Vibes', fallback: 'cursive', weights: [400], width: 0.42, script: true },
+  formal: { label: 'Formal', family: 'Pinyon Script', fallback: 'cursive', weights: [400], width: 0.55, script: true },
+  manuscrita: { label: 'Manuscrita', family: 'Dancing Script', fallback: 'cursive', weights: [400, 500, 700], width: 0.47, script: true },
+  moderna: { label: 'Moderna', family: 'Inter', fallback: 'system-ui, sans-serif', weights: [400, 500, 700], width: 0.62, script: false },
+  geometrica: { label: 'Geométrica', family: 'Montserrat', fallback: 'system-ui, sans-serif', weights: [400, 500, 700], width: 0.66, script: false },
+  gotica: { label: 'Gótica', family: 'UnifrakturMaguntia', fallback: 'serif', weights: [400], width: 0.55, script: false },
+} satisfies Record<string, FontDef>
+
+export type FontStyle = keyof typeof FONTS
 export type SymbolOption = 'ninguno' | 'cruz' | 'angel' | 'paloma' | 'corazon' | 'estrella'
 
 /** Dónde va el mensaje de la familia: en la placa inferior (bajo nombre y fechas) o sobre el cuerpo de la lápida */
@@ -103,11 +130,10 @@ export const PLACEMENT_LABELS: Record<MessagePlacement, string> = {
   cuerpo: 'Sobre el cuerpo de la lápida',
 }
 
-export const FONT_LABELS: Record<FontStyle, string> = {
-  clasica: 'Clásica',
-  caligrafica: 'Caligráfica',
-  moderna: 'Moderna',
-}
+export const FONT_LABELS = Object.fromEntries(Object.entries(FONTS).map(([k, f]) => [k, f.label])) as Record<FontStyle, string>
+
+/** Límites del control de tamaño del texto (multiplicador) */
+export const TEXT_SCALE = { min: 0.75, max: 1.35, step: 0.05 }
 
 export const SYMBOL_LABELS: Record<SymbolOption, string> = {
   ninguno: 'Sin símbolo',
@@ -128,6 +154,9 @@ export interface Customization {
   /** Mensaje familiar dentro del 20% del área de corte láser (solo piezas con metal) */
   laserMessage: string
   font: FontStyle
+  /** Tamaño del texto respecto al tamaño base del diseño (1 = normal) */
+  textScale: number
+  bold: boolean
   symbol: SymbolOption
   notes: string
   /** Imagen propia del cliente para la zona de imagen: data URL en el carrito, ruta /uploads/ en el pedido */
@@ -148,6 +177,8 @@ export const EMPTY_CUSTOMIZATION: Customization = {
   placement: 'placa',
   laserMessage: '',
   font: 'clasica',
+  textScale: 1,
+  bold: false,
   symbol: 'ninguno',
   notes: '',
   customImage: '',
@@ -179,15 +210,52 @@ export function laserCharLimit(product: Pick<Product, 'widthCm' | 'heightCm'>) {
   return Math.max(20, Math.min(180, Math.floor(area / 1.5)))
 }
 
-export type OrderStatus = 'recibido' | 'en_diseno' | 'en_fabricacion' | 'enviado' | 'entregado' | 'cancelado'
+export type OrderStatus = 'nuevo' | 'pagado' | 'listo_fabricar' | 'en_fabricacion' | 'listo_envio' | 'enviado' | 'completado' | 'cancelado'
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
-  recibido: 'Recibido',
-  en_diseno: 'En diseño',
+  nuevo: 'Nuevo',
+  pagado: 'Pagado',
+  listo_fabricar: 'Listo para fabricar',
   en_fabricacion: 'En fabricación',
+  listo_envio: 'Listo para enviar',
   enviado: 'Enviado',
-  entregado: 'Entregado',
+  completado: 'Completado',
   cancelado: 'Cancelado',
+}
+
+/** Recorrido normal de un pedido (sin cancelado) */
+export const ORDER_FLOW: OrderStatus[] = ['nuevo', 'pagado', 'listo_fabricar', 'en_fabricacion', 'listo_envio', 'enviado', 'completado']
+
+export function nextStatus(status: OrderStatus): OrderStatus | null {
+  const i = ORDER_FLOW.indexOf(status)
+  return i >= 0 && i < ORDER_FLOW.length - 1 ? ORDER_FLOW[i + 1] : null
+}
+
+/** Pedidos guardados con los estados anteriores */
+const LEGACY_STATUS: Record<string, OrderStatus> = { recibido: 'nuevo', en_diseno: 'nuevo', entregado: 'completado' }
+
+export function normalizeStatus(status: string): OrderStatus {
+  return status in ORDER_STATUS_LABELS ? (status as OrderStatus) : (LEGACY_STATUS[status] ?? 'nuevo')
+}
+
+/** Aviso que recibe el cliente (WhatsApp y correo) cuando su pedido cambia de estado */
+export function statusMessage(status: OrderStatus, orderId: number) {
+  const text: Record<OrderStatus, string> = {
+    nuevo: `recibimos tu pedido #${orderId}. Te escribiremos para confirmar el diseño y el pago.`,
+    pagado: `confirmamos el pago de tu pedido #${orderId}. ¡Gracias por tu confianza!`,
+    listo_fabricar: `el diseño de tu pedido #${orderId} está aprobado y listo para fabricarse.`,
+    en_fabricacion: `comenzamos a fabricar tu pedido #${orderId} en nuestro taller.`,
+    listo_envio: `tu pedido #${orderId} está terminado y listo para enviarse.`,
+    enviado: `tu pedido #${orderId} va en camino.`,
+    completado: `tu pedido #${orderId} fue entregado. Gracias por confiar en nosotros.`,
+    cancelado: `tu pedido #${orderId} fue cancelado. Si tienes dudas, escríbenos.`,
+  }
+  return `Ángel Eterno: ${text[status]}`
+}
+
+export interface OrderStatusChange {
+  status: OrderStatus
+  at: string
 }
 
 export interface OrderItem {
@@ -202,12 +270,16 @@ export interface OrderItem {
   widthCm?: number
   heightCm?: number
   zones?: ProductZones | null
+  /** Imagen JPG del diseño final, generada al confirmar el pedido */
+  designImage?: string
 }
 
 export interface Order {
   id: number
   userId: number
   status: OrderStatus
+  /** Cambios de estado, del más antiguo al más reciente */
+  history: OrderStatusChange[]
   total: number
   items: OrderItem[]
   shippingAddress: string

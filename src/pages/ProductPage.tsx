@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { EMPTY_CUSTOMIZATION, MATERIAL_LABELS, hasMetal, hasZones, type Customization, type Product } from '../../shared/types'
 import { Customizer } from '../components/Customizer'
 import { MemorialPreview } from '../components/MemorialPreview'
 import { useCart } from '../lib/cart'
+import { downloadImage, renderDesignImage } from '../lib/designImage'
 import { money } from '../lib/format'
 import { useApi } from '../lib/useApi'
 
@@ -14,6 +15,8 @@ export default function ProductPage() {
   // null: vista inicial según el producto (ver `shown` abajo)
   const [view, setView] = useState<'preview' | number | null>(null)
   const [missingName, setMissingName] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const previewRef = useRef<HTMLDivElement>(null)
   const cart = useCart()
   const navigate = useNavigate()
 
@@ -34,6 +37,22 @@ export default function ProductPage() {
   const hasPhoto = Boolean(p.images[0] && !p.images[0].endsWith('.svg'))
   const livePreview = hasZones(p) || !hasPhoto
   const shown = view ?? (livePreview ? 'preview' : 0)
+  const downloadDesign = async () => {
+    setExporting(true)
+    try {
+      if (shown !== 'preview') {
+        setView('preview')
+        await new Promise((r) => setTimeout(r, 400))
+      }
+      const svg = previewRef.current?.querySelector('svg')
+      if (svg) downloadImage(await renderDesignImage(svg), `diseno-${p.slug}.jpg`)
+    } catch {
+      alert('No pudimos generar la imagen. Intenta de nuevo.')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const addToCart = () => {
     if (!customization.fullName.trim()) {
       setMissingName(true)
@@ -52,7 +71,7 @@ export default function ProductPage() {
       <div className="mt-4 grid gap-10 md:grid-cols-2">
         {/* Vista previa: fija en escritorio para ver los cambios mientras se escribe */}
         <div className="md:sticky md:top-24 md:self-start">
-          <div className="rounded-3xl bg-sand p-6">
+          <div ref={previewRef} className="rounded-3xl bg-sand p-6">
             {shown === 'preview' ? (
               <MemorialPreview
                 product={p}
@@ -78,7 +97,18 @@ export default function ProductPage() {
               </button>
             ))}
           </div>
-          <p className="mt-2 text-xs text-stone">Vista previa ilustrativa. Te enviamos la prueba final por WhatsApp antes de fabricar.</p>
+          <div className="mt-2 flex items-start justify-between gap-3">
+            <p className="text-xs text-stone">Vista previa ilustrativa. Te enviamos la prueba final por WhatsApp antes de fabricar.</p>
+            <button
+              type="button"
+              onClick={downloadDesign}
+              disabled={!customization.fullName.trim() || exporting}
+              title={customization.fullName.trim() ? undefined : 'Escribe el nombre para descargar tu diseño'}
+              className="btn-ghost shrink-0 px-4 py-2"
+            >
+              {exporting ? 'Generando…' : 'Descargar diseño'}
+            </button>
+          </div>
         </div>
 
         <div>

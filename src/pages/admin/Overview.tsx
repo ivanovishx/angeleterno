@@ -1,13 +1,15 @@
 import { Link } from 'react-router-dom'
-import type { Order } from '../../../shared/types'
+import { ORDER_FLOW, type Order, type OrderStatus } from '../../../shared/types'
 import { OrderStatusBadge } from '../../components/OrderStatusBadge'
 import { dateLong, money } from '../../lib/format'
+import { PIPELINE_LABELS, STATUS_DOTS } from '../../lib/orderStatus'
 import { useApi } from '../../lib/useApi'
 
 interface Stats {
   products: number
   customers: number
   openOrders: number
+  byStatus: Record<OrderStatus, number>
   revenue: number
 }
 
@@ -30,6 +32,18 @@ export default function Overview() {
           </div>
         ))}
       </div>
+      <section>
+        <h2 className="mb-3 text-2xl">Pedidos por etapa</h2>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+          {ORDER_FLOW.map((s) => (
+            <Link key={s} to={`/admin/pedidos?estado=${s}`} className="card p-3 transition hover:border-gold">
+              <span className={`inline-block h-2 w-2 rounded-full ${STATUS_DOTS[s]}`} />
+              <span className="mt-1 block font-serif text-3xl leading-none">{stats?.byStatus?.[s] ?? '–'}</span>
+              <span className="mt-1 block text-xs leading-tight text-stone">{PIPELINE_LABELS[s]}</span>
+            </Link>
+          ))}
+        </div>
+      </section>
       <div className="flex flex-wrap gap-3">
         <Link to="/admin/productos/nuevo" className="btn-gold">
           + Subir producto nuevo

@@ -9,7 +9,7 @@ import { db, ROOT, UPLOADS_DIR, toOrder, toProduct, toUser } from './db.ts'
 import { createOtp, loadUser, requireAdmin, requireUser, signSession, verifyOtp } from './auth.ts'
 import { TEST_PASSWORD, TEST_USER, isTestPhone, testLoginEnabled } from './testLogin.ts'
 import { emailConfigured, sendEmail, sendWhatsApp, whatsappConfigured } from './notify.ts'
-import { ORDER_STATUS_LABELS, laserCharLimit, type OrderItem, type OrderStatus } from '../shared/types.ts'
+import { ORDER_STATUS_LABELS, laserCharLimit, normalizeStatus, statusMessage, type OrderItem, type OrderStatus } from '../shared/types.ts'
 import { cleanCustomization, isEmail, normalizePhone, parseProductFields, slugify, str } from '../shared/validation.ts'
 
 const isProd = process.env.NODE_ENV === 'production'
@@ -232,7 +232,7 @@ app.post('/api/orders', requireUser, async (req, res) => {
   if (shippingAddress.length < 10) return void res.status(400).json({ error: 'Escribe la dirección de entrega completa.' })
 
   const items: OrderItem[] = []
-  const pendingImages: Array<{ item: OrderItem; buf: Buffer; ext: string }> = []
+  const pendingImages: Array<{ item: OrderItem; buf: Buffer; ext: string; kind: 'cliente' | 'diseno' }> = []
   for (const raw of rawItems) {
     const row = db.prepare('SELECT * FROM products WHERE id = ? AND active = 1').get(Number(raw.productId))
     if (!row) return void res.status(400).json({ error: 'Uno de los productos ya no está disponible.' })
@@ -254,27 +254,35 @@ app.post('/api/orders', requireUser, async (req, res) => {
     if (p.zones?.image) {
       const img = decodeCustomImage(raw.customization?.customImage)
       if (img === 'invalid') return void res.status(400).json({ error: `La imagen de "${p.name}" debe ser JPG, PNG o WEBP de máximo 6 MB.` })
-      if (img) pendingImages.push({ item, ...img })
+      if (img) pendingImages.push({ item, ...img, kind: 'cliente' })
     }
+    // Imagen del diseño final generada en el navegador; si no llega o no es válida, el pedido sigue sin ella
+    const design = decodeCustomImage(raw.designImage)
+    if (design && design !== 'invalid') pendingImages.push({ item, ...design, kind: 'diseno' })
     items.push(item)
   }
   // Las imágenes se guardan solo cuando todo el pedido es válido
-  for (const { item, buf, ext } of pendingImages) {
-    const file = `cliente-${Date.now()}-${randomBytes(4).toString('hex')}.${ext}`
+  for (const { item, buf, ext, kind } of pendingImages) {
+    const file = `${kind}-${Date.now()}-${randomBytes(4).toString('hex')}.${ext}`
     writeFileSync(path.join(UPLOADS_DIR, file), buf)
-    item.customization.customImage = `/uploads/${file}`
+    if (kind === 'cliente') item.customization.customImage = `/uploads/${file}`
+    else item.designImage = `/uploads/${file}`
   }
   const total = items.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
   const result = db
-    .prepare('INSERT INTO orders (user_id, total, items, shipping_address) VALUES (?, ?, ?, ?)')
-    .run(req.user!.id, total, JSON.stringify(items), shippingAddress)
+    .prepare('INSERT INTO orders (user_id, status, history, total, items, shipping_address) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(req.user!.id, 'nuevo', JSON.stringify([{ status: 'nuevo', at: new Date().toISOString() }]), total, JSON.stringify(items), shippingAddress)
   const order = toOrder(db.prepare('SELECT * FROM orders WHERE id = ?').get(result.lastInsertRowid) as Record<string, unknown>)
-
-  const msg = `Ángel Eterno: recibimos tu pedido #${order.id} por ${money(total)}. Te contactaremos para confirmar el diseño antes de fabricar.`
-  sendWhatsApp(req.user!.phone, msg).catch(console.error)
-  if (req.user!.email) sendEmail(req.user!.email, `Pedido #${order.id} recibido`, msg).catch(console.error)
+  notifyCustomer(req.user!, order.id, 'nuevo', ` Total: ${money(total)}.`)
   res.status(201).json({ order })
 })
+
+/** Avisa al cliente por WhatsApp y, si tiene correo, también por correo */
+function notifyCustomer(customer: { phone: string; email: string | null }, orderId: number, status: OrderStatus, extra = '') {
+  const message = statusMessage(status, orderId) + extra
+  sendWhatsApp(customer.phone, message).catch(console.error)
+  if (customer.email) sendEmail(customer.email, `Pedido #${orderId}: ${ORDER_STATUS_LABELS[status]}`, message).catch(console.error)
+}
 
 app.get('/api/orders/mine', requireUser, (req, res) => {
   const rows = db.prepare('SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC, id DESC').all(req.user!.id)
@@ -293,21 +301,28 @@ app.patch('/api/admin/orders/:id', requireUser, requireAdmin, (req, res) => {
   const status = String(req.body.status) as OrderStatus
   if (!(status in ORDER_STATUS_LABELS)) return void res.status(400).json({ error: 'Estado inválido.' })
   const id = Number(req.params.id)
-  const changed = db.prepare("UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, id)
-  if (!changed.changes) return void res.status(404).json({ error: 'Pedido no encontrado.' })
+  const row = db.prepare(`${ORDER_WITH_CUSTOMER} WHERE o.id = ?`).get(id)
+  if (!row) return void res.status(404).json({ error: 'Pedido no encontrado.' })
+  const current = toOrder(row as Record<string, unknown>)
+  if (current.status === status) return void res.json({ order: current })
+  const history = [...current.history, { status, at: new Date().toISOString() }]
+  db.prepare("UPDATE orders SET status = ?, history = ?, updated_at = datetime('now') WHERE id = ?").run(status, JSON.stringify(history), id)
   const order = toOrder(db.prepare(`${ORDER_WITH_CUSTOMER} WHERE o.id = ?`).get(id) as Record<string, unknown>)
-  if (req.body.notify !== false && order.customer) {
-    sendWhatsApp(order.customer.phone, `Ángel Eterno: tu pedido #${order.id} ahora está "${ORDER_STATUS_LABELS[status]}".`).catch(console.error)
-  }
+  if (req.body.notify !== false && order.customer) notifyCustomer(order.customer, order.id, status)
   res.json({ order })
 })
 
 app.get('/api/admin/stats', requireUser, requireAdmin, (_req, res) => {
   const one = (sql: string) => Number(Object.values(db.prepare(sql).get() as Record<string, unknown>)[0] ?? 0)
+  const byStatus = Object.fromEntries(Object.keys(ORDER_STATUS_LABELS).map((k) => [k, 0])) as Record<OrderStatus, number>
+  for (const r of db.prepare('SELECT status, COUNT(*) AS n FROM orders GROUP BY status').all() as Array<{ status: string; n: number }>) {
+    byStatus[normalizeStatus(r.status)] += Number(r.n)
+  }
   res.json({
     products: one('SELECT COUNT(*) FROM products'),
     customers: one('SELECT COUNT(*) FROM users'),
-    openOrders: one("SELECT COUNT(*) FROM orders WHERE status NOT IN ('entregado', 'cancelado')"),
+    openOrders: Object.entries(byStatus).reduce((s, [k, n]) => (k === 'completado' || k === 'cancelado' ? s : s + n), 0),
+    byStatus,
     revenue: one("SELECT COALESCE(SUM(total), 0) FROM orders WHERE status != 'cancelado'"),
   })
 })

@@ -1,13 +1,21 @@
-import type { FontStyle, OrderItem } from '../../shared/types'
+import { FONTS, type Customization, type FontStyle, type OrderItem } from '../../shared/types'
 
-export const FONT_FAMILY: Record<FontStyle, string> = {
-  clasica: "'Cormorant Garamond', Georgia, serif",
-  caligrafica: "'Great Vibes', cursive",
-  moderna: "'Inter', system-ui, sans-serif",
+export const FONT_FAMILY = Object.fromEntries(Object.entries(FONTS).map(([k, f]) => [k, `'${f.family}', ${f.fallback}`])) as Record<FontStyle, string>
+
+/** Ancho aproximado de un carácter respecto al tamaño de letra, para ajustar el nombre al espacio */
+export const CHAR_WIDTH = Object.fromEntries(Object.entries(FONTS).map(([k, f]) => [k, f.width])) as Record<FontStyle, number>
+
+/** Peso, escala y si es manuscrita, con valores por defecto para personalizaciones guardadas antes de estos controles */
+export function textStyle(c: Pick<Customization, 'font' | 'textScale' | 'bold'>) {
+  const def = FONTS[c.font] ?? FONTS.clasica
+  return {
+    script: def.script,
+    scale: c.textScale || 1,
+    weight: c.bold ? 700 : def.script ? 400 : 500,
+    /** La negrita ensancha un poco las letras */
+    charWidth: def.width * (c.bold ? 1.07 : 1),
+  }
 }
-
-/** Ancho aproximado de un carácter respecto al tamaño de letra, para ajustar el nombre a la placa */
-export const CHAR_WIDTH: Record<FontStyle, number> = { clasica: 0.56, caligrafica: 0.42, moderna: 0.62 }
 
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 

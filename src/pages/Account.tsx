@@ -2,8 +2,8 @@ import { useState, type FormEvent } from 'react'
 import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import { MATERIAL_LABELS, hasZones, type Order, type User } from '../../shared/types'
 import { CustomizationSummary } from '../components/CustomizationSummary'
-import { MemorialPreview } from '../components/MemorialPreview'
-import { OrderProgress, OrderStatusBadge } from '../components/OrderStatusBadge'
+import { OrderItemDesign } from '../components/OrderItemDesign'
+import { OrderProgress, OrderStatusBadge, OrderTimeline } from '../components/OrderStatusBadge'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { dateLong, money } from '../lib/format'
@@ -72,9 +72,7 @@ function OrderCard({ order, highlight }: { order: Order; highlight: boolean }) {
         <div className="space-y-4 border-t border-ink/10 bg-paper/60 p-5">
           {order.items.map((item, i) => (
             <div key={i} className="flex gap-4">
-              <div className="w-24 shrink-0 self-start rounded-lg bg-sand p-1 sm:w-32">
-                <MemorialPreview product={previewProductOf(item)} customization={item.customization} className="w-full" />
-              </div>
+              <OrderItemDesign item={item} orderId={order.id} index={i} className="w-24 sm:w-32" />
               <div className="min-w-0 flex-1 space-y-2">
                 <p className="font-medium">
                   {item.productName} <span className="font-normal text-stone">× {item.quantity}</span>
@@ -88,6 +86,11 @@ function OrderCard({ order, highlight }: { order: Order; highlight: boolean }) {
             <span className="text-stone">Entrega: </span>
             {order.shippingAddress}
           </p>
+          <div className="border-t border-ink/10 pt-4">
+            <p className="mb-3 font-medium">Actualizaciones</p>
+            <OrderTimeline order={order} />
+            <p className="mt-3 text-xs text-stone">Te avisamos por WhatsApp, y por correo si lo registraste, cada vez que tu pedido avanza.</p>
+          </div>
         </div>
       )}
     </li>

@@ -16,8 +16,14 @@ React + TypeScript (Vite, Tailwind) en el frontend y Express + SQLite (`node:sql
   La foto se ve intacta hasta que el cliente empieza a escribir.
   La vista previa muestra la foto tal cual y solo cambia esas zonas; la imagen del cliente se ve en tono latón,
   como quedaría en corte láser, y se guarda con el pedido. Productos sin zonas usan la ilustración genérica.
+- **Letra del grabado**: 10 tipografías (`FONTS` en `shared/types.ts`), tamaño del texto y negrita.
+- **Imagen del diseño**: el cliente puede descargar su diseño en JPG desde la página del producto; al confirmar el
+  pedido se genera y se guarda con cada pieza, y queda descargable en su historial y en el dashboard.
+- **Estados del pedido**: Nuevo → Pagado → Listo para fabricar → En fabricación → Listo para enviar → Enviado →
+  Completado (o Cancelado). En el dashboard se ven por etapa y se avanzan con un botón; cada cambio queda en el
+  historial y avisa al cliente por WhatsApp y correo (`statusMessage` en `shared/types.ts`).
 - **Cuentas sin contraseña**: registro con número de WhatsApp; el código de acceso llega por WhatsApp o correo.
-- **Historial de pedidos** con barra de progreso (Recibido → En diseño → En fabricación → Enviado → Entregado).
+- **Historial de pedidos** con barra de progreso y las actualizaciones de cada pedido.
 - **Dashboard** (`/admin`): subir productos con varias fotos (arrastrar o tocar), editar, ocultar, destacar,
   elegir foto principal, y gestionar pedidos. Cada cambio de estado avisa al cliente por WhatsApp.
 - Diseño responsivo pensado primero para celular.

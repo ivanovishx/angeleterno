@@ -22,7 +22,8 @@ export function CustomizationSummary({ c, material, zoned = false }: Props) {
         Ver imagen original
       </a>
     )],
-    ['Estilo', zoned ? FONT_LABELS[c.font] : `${FONT_LABELS[c.font]} · ${SYMBOL_LABELS[c.symbol]}`],
+    ['Letra', [FONT_LABELS[c.font] ?? c.font, c.bold && 'negrita', (c.textScale || 1) !== 1 && `tamaño ${Math.round(c.textScale * 100)}%`].filter(Boolean).join(' · ')],
+    ['Símbolo', zoned ? '' : SYMBOL_LABELS[c.symbol]],
     ['Notas', c.notes],
   ]
   return (

@@ -3,7 +3,7 @@
  * pero guarda usuarios, productos y pedidos en el localStorage del visitante.
  * El catálogo inicial viene de demo/catalog.json, generado por server/exportDemo.ts.
  */
-import { ORDER_STATUS_LABELS, laserCharLimit, type Order, type OrderItem, type OrderStatus, type OtpChannel, type Product, type User } from '../../shared/types.ts'
+import { ORDER_STATUS_LABELS, laserCharLimit, normalizeStatus, type Order, type OrderItem, type OrderStatus, type OtpChannel, type Product, type User } from '../../shared/types.ts'
 import { TEST_LOGIN_FLAG, TEST_PASSWORD, TEST_USER } from '../../shared/testLogin.ts'
 import { cleanCustomization, isEmail, normalizePhone, parseProductFields, slugify, str } from '../../shared/validation.ts'
 import { ApiError, tokenStore } from './api'
@@ -49,6 +49,7 @@ async function load(): Promise<DemoDb> {
     if (!stored) throw err
   }
   cache = stored ?? { users: [], products: [], orders: [], codes: {}, seq: { user: 0, product: 0, order: 0 } }
+  upgradeOrders(cache)
   if (published && cache.catalog?.version !== published.version) {
     syncCatalog(cache, published.version, published.products)
     save(cache)
@@ -109,6 +110,16 @@ async function imagesFrom(form: FormData) {
   const files = form.getAll('images').filter((f): f is File => f instanceof File && f.type.startsWith('image/'))
   return Promise.all(files.slice(0, 10).map((f) => shrinkImage(f, 1200)))
 }
+
+/** Pedidos guardados antes de los estados nuevos y del historial */
+function upgradeOrders(db: DemoDb) {
+  for (const o of db.orders) {
+    o.status = normalizeStatus(o.status)
+    o.history = o.history?.length ? o.history.map((h) => ({ ...h, status: normalizeStatus(h.status) })) : [{ status: o.status, at: o.createdAt }]
+  }
+}
+
+const IMAGE_DATA_URL = /^data:image\/(png|jpeg|webp);base64,/
 
 function withCustomer(db: DemoDb, o: Order): Order {
   const u = db.users.find((x) => x.id === o.userId)
@@ -261,7 +272,8 @@ export async function demoRequest<T>(path: string, init: RequestInit & { json?: 
       const customization = cleanCustomization(raw.customization, p.material, laserCharLimit(p))
       if (!customization.fullName) fail(400, `Falta el nombre a grabar en "${p.name}".`)
       const image = (raw.customization as Record<string, unknown> | undefined)?.customImage
-      if (p.zones?.image && typeof image === 'string' && /^data:image\/(png|jpeg|webp);base64,/.test(image)) customization.customImage = image
+      if (p.zones?.image && typeof image === 'string' && IMAGE_DATA_URL.test(image)) customization.customImage = image
+      const design = raw.designImage
       return {
         productId: p.id,
         productName: p.name,
@@ -273,13 +285,16 @@ export async function demoRequest<T>(path: string, init: RequestInit & { json?: 
         widthCm: p.widthCm,
         heightCm: p.heightCm,
         zones: p.zones,
+        ...(typeof design === 'string' && IMAGE_DATA_URL.test(design) && { designImage: design }),
       }
     })
     const now = new Date().toISOString()
+    // En la demo no se envían mensajes reales: el historial del pedido es el aviso que ve el cliente en su cuenta
     const order: Order = {
       id: ++db.seq.order,
       userId: me.id,
-      status: 'recibido',
+      status: 'nuevo',
+      history: [{ status: 'nuevo', at: now }],
       total: items.reduce((s, i) => s + i.unitPrice * i.quantity, 0),
       items,
       shippingAddress,
@@ -305,17 +320,23 @@ export async function demoRequest<T>(path: string, init: RequestInit & { json?: 
     const status = String(body.status) as OrderStatus
     if (!(status in ORDER_STATUS_LABELS)) fail(400, 'Estado inválido.')
     const order = db.orders.find((o) => o.id === Number(m![1])) ?? fail(404, 'Pedido no encontrado.')
-    Object.assign(order, { status, updatedAt: new Date().toISOString() })
+    if (order.status !== status) {
+      const at = new Date().toISOString()
+      Object.assign(order, { status, updatedAt: at, history: [...order.history, { status, at }] })
+    }
     return done({ order: withCustomer(db, order) }, true)
   }
 
   if (route === 'GET /admin/stats') {
     needAdmin()
     const live = db.orders.filter((o) => o.status !== 'cancelado')
+    const byStatus = Object.fromEntries(Object.keys(ORDER_STATUS_LABELS).map((k) => [k, 0])) as Record<OrderStatus, number>
+    for (const o of db.orders) byStatus[o.status]++
     return done({
       products: db.products.length,
       customers: db.users.length,
-      openOrders: db.orders.filter((o) => !['entregado', 'cancelado'].includes(o.status)).length,
+      openOrders: db.orders.filter((o) => !['completado', 'cancelado'].includes(o.status)).length,
+      byStatus,
       revenue: live.reduce((s, o) => s + o.total, 0),
     })
   }

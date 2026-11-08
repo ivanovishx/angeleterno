@@ -1,5 +1,5 @@
 // Validaciones compartidas por el servidor y la versión demo (que corre sin servidor en el navegador)
-import { EMPTY_CUSTOMIZATION, FONT_LABELS, LIMITS, SYMBOL_LABELS, hasMetal, parseZones, type Customization, type Material, type ProductZones } from './types.ts'
+import { EMPTY_CUSTOMIZATION, FONT_LABELS, LIMITS, SYMBOL_LABELS, TEXT_SCALE, hasMetal, parseZones, type Customization, type Material, type ProductZones } from './types.ts'
 
 export const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
 
@@ -28,6 +28,8 @@ export function cleanCustomization(input: unknown, material: Material, laserLimi
     placement: c.placement === 'cuerpo' ? 'cuerpo' : 'placa',
     laserMessage: hasMetal(material) ? str(c.laserMessage, laserLimit) : '',
     font: c.font && String(c.font) in FONT_LABELS ? (c.font as Customization['font']) : EMPTY_CUSTOMIZATION.font,
+    textScale: clamp(Number(c.textScale), TEXT_SCALE.min, TEXT_SCALE.max, 1),
+    bold: c.bold === true,
     symbol: c.symbol && String(c.symbol) in SYMBOL_LABELS ? (c.symbol as Customization['symbol']) : EMPTY_CUSTOMIZATION.symbol,
     notes: str(c.notes, LIMITS.notes),
     customImage: '',

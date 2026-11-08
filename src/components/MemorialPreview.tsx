@@ -1,6 +1,6 @@
 import { useId } from 'react'
 import { LASER_CUSTOM_AREA, hasMetal, hasZones, type Customization, type Product, type ProductZones } from '../../shared/types'
-import { CHAR_WIDTH, FONT_FAMILY, fullDate, wrap } from '../lib/inscription'
+import { FONT_FAMILY, fullDate, textStyle, wrap } from '../lib/inscription'
 import { PhotoPreview } from './PhotoPreview'
 import { SymbolPath } from './Symbols'
 
@@ -43,8 +43,8 @@ function ArtPreview({ product, customization: c, className = '' }: Props) {
   const metal = hasMetal(product.material)
   const allMetal = product.material === 'metal'
   const placement = c.placement ?? 'placa'
-  const font = FONT_FAMILY[c.font]
-  const script = c.font === 'caligrafica'
+  const font = FONT_FAMILY[c.font] ?? FONT_FAMILY.clasica
+  const { script, scale, weight, charWidth } = textStyle(c)
 
   // ---- Geometría ----
   const W = 400
@@ -72,18 +72,22 @@ function ArtPreview({ product, customization: c, className = '' }: Props) {
 
   // ---- Mensaje sobre el cuerpo ----
   const hasSymbol = c.symbol !== 'ninguno'
-  const bodyMsgLines = placement === 'cuerpo' ? wrap(c.epitaph || 'Mensaje de la familia', script ? 20 : 24, 4) : []
-  const bodyMsgSize = script ? 26 : 20
+  const bodyMsgSize = (script ? 26 : 20) * scale
+  const bodyMsgLines = placement === 'cuerpo' ? wrap(c.epitaph || 'Mensaje de la familia', Math.floor(200 / (bodyMsgSize * charWidth)), 4) : []
   const msgAreaTop = T + 40 + (hasSymbol ? 70 : 0)
   const msgAreaBottom = (metal ? laserY : bottom) - 16
   const bodyMsgY = (msgAreaTop + msgAreaBottom) / 2 - ((bodyMsgLines.length - 1) * (bodyMsgSize + 4)) / 2
 
   // ---- Placa: nombre, fechas y mensaje ----
   const name = c.fullName || 'Nombre completo'
-  const nameSize = Math.min(script ? 34 : 27, 248 / (name.length * CHAR_WIDTH[c.font]))
+  let nameSize = Math.min((script ? 34 : 27) * scale, 248 / (name.length * charWidth))
   const dates = [fullDate(c.birthDate) || 'Fecha de nacimiento', fullDate(c.deathDate) || 'Fecha de fallecimiento']
-  const plaqueMsg = placement === 'placa' ? wrap(c.epitaph || 'Mensaje de la familia', 42, 2) : []
-  const msgSize = script ? 17 : 12.5
+  let msgSize = (script ? 17 : 12.5) * scale
+  const plaqueMsg = placement === 'placa' ? wrap(c.epitaph || 'Mensaje de la familia', Math.floor(270 / (msgSize * charWidth * 0.92)), 2) : []
+  // Con el texto agrandado, el nombre y el mensaje se reducen lo necesario para caber en la placa
+  const fit = Math.min(1, (plaque.h - 10 - 2 * 17 - 20) / (nameSize + plaqueMsg.length * (msgSize + 3)))
+  nameSize *= fit
+  msgSize *= fit
   const blockH = nameSize + 6 + 2 * 17 + 14 + plaqueMsg.length * (msgSize + 3)
   let py = plaque.y + (plaque.h - blockH) / 2
   const nameY = py + nameSize * 0.82
@@ -169,7 +173,7 @@ function ArtPreview({ product, customization: c, className = '' }: Props) {
               x={bodyX + bodyW / 2 + (hasSymbol ? 30 : 10)}
               y={bodyMsgY + i * (bodyMsgSize + 4)}
               fontSize={bodyMsgSize}
-              fontWeight={script ? 400 : 600}
+              fontWeight={weight}
               stroke="#2a160a"
               strokeWidth="3"
               strokeOpacity=".55"
@@ -222,7 +226,7 @@ function ArtPreview({ product, customization: c, className = '' }: Props) {
       ))}
 
       <g textAnchor="middle" fill={plaqueInk}>
-        <text x={W / 2} y={nameY} fontSize={nameSize} fontWeight={script ? 400 : 700} style={{ fontFamily: font }} opacity={c.fullName ? 1 : 0.5}>
+        <text x={W / 2} y={nameY} fontSize={nameSize} fontWeight={weight} style={{ fontFamily: font }} opacity={c.fullName ? 1 : 0.5}>
           {name}
         </text>
         {dates.map((d, i) => (
@@ -241,7 +245,7 @@ function ArtPreview({ product, customization: c, className = '' }: Props) {
         <path d={`M${W / 2 - 70} ${dividerY}H${W / 2 - 8}M${W / 2 + 8} ${dividerY}H${W / 2 + 70}`} stroke={plaqueInk} strokeWidth="1.2" />
         <rect x={W / 2 - 4} y={dividerY - 4} width="8" height="8" transform={`rotate(45 ${W / 2} ${dividerY})`} />
         {plaqueMsg.map((l, i) => (
-          <text key={i} x={W / 2} y={msgY[i]} fontSize={msgSize} fontWeight={script ? 400 : 700} style={{ fontFamily: font }} opacity={c.epitaph ? 1 : 0.5}>
+          <text key={i} x={W / 2} y={msgY[i]} fontSize={msgSize} fontWeight={weight} style={{ fontFamily: font }} opacity={c.epitaph ? 1 : 0.5}>
             {l}
           </text>
         ))}

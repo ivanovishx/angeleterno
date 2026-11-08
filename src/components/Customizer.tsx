@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react'
 import {
-  FONT_LABELS,
+  FONTS,
   LIMITS,
   PLACEMENT_LABELS,
   SYMBOL_LABELS,
+  TEXT_SCALE,
   hasMetal,
   hasZones,
   laserCharLimit,
@@ -14,17 +15,12 @@ import {
   type ProductZones,
   type SymbolOption,
 } from '../../shared/types'
+import { FONT_FAMILY } from '../lib/inscription'
 import { CustomImageField } from './CustomImageField'
 import { SymbolPath } from './Symbols'
 
 const EPITAPH_IDEAS = ['Siempre en nuestros corazones', 'Tu luz nos sigue guiando', 'Amado esposo, padre y abuelo', 'Descansa en paz']
 const LASER_IDEAS = ['Te amaremos por siempre. Tu familia', 'Hasta que volvamos a encontrarnos', 'Gracias por tanto amor']
-
-const FONT_CLASS: Record<FontStyle, string> = {
-  clasica: 'font-serif text-2xl',
-  caligrafica: 'font-script text-3xl',
-  moderna: 'font-sans text-lg font-medium',
-}
 
 function Counter({ value, max }: { value: string; max: number }) {
   return (
@@ -64,6 +60,8 @@ interface Props {
 
 export function Customizer({ product, value, onChange }: Props) {
   const set = <K extends keyof Customization>(key: K, v: Customization[K]) => onChange({ ...value, [key]: v })
+  // Las muestras de letra usan el primer nombre que escribe el cliente
+  const sample = value.fullName.trim().split(/\s+/)[0] || 'Ana'
   const laserMax = laserCharLimit(product)
   // Con zonas definidas sobre la foto, solo se personalizan esas zonas: el resto del diseño es fijo
   const zoneMode = hasZones(product)
@@ -202,23 +200,62 @@ export function Customizer({ product, value, onChange }: Props) {
         </Section>
       )}
 
-      <Section title={`${num()}. ${zoneMode ? 'Tipografía de la placa' : 'Estilo'}`}>
-        {!zoneMode && <p className="label">Tipografía</p>}
-        <div className="grid grid-cols-3 gap-2">
-          {(Object.keys(FONT_LABELS) as FontStyle[]).map((f) => (
+      <Section title={`${num()}. ${zoneMode ? 'Letra del grabado' : 'Estilo'}`}>
+        <p className="label">Tipografía</p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          {(Object.keys(FONTS) as FontStyle[]).map((f) => (
             <button
               key={f}
               type="button"
               onClick={() => set('font', f)}
               aria-pressed={value.font === f}
-              className={`rounded-xl border px-2 py-3 text-center transition ${
+              className={`min-w-0 rounded-xl border px-2 py-2.5 text-center transition ${
                 value.font === f ? 'border-gold bg-gold/10 ring-2 ring-gold/25' : 'border-ink/15 bg-white hover:border-ink/40'
               }`}
             >
-              <span className={`block leading-none ${FONT_CLASS[f]}`}>Ana</span>
-              <span className="mt-1 block text-xs text-stone">{FONT_LABELS[f]}</span>
+              <span
+                className={`block truncate leading-tight ${FONTS[f].script ? 'text-xl' : 'text-base'}`}
+                style={{ fontFamily: FONT_FAMILY[f], fontWeight: value.bold ? 700 : FONTS[f].script ? 400 : 500 }}
+              >
+                {sample}
+              </span>
+              <span className="mt-1 block text-[11px] text-stone">{FONTS[f].label}</span>
             </button>
           ))}
+        </div>
+        <div className="flex items-end gap-3 pt-1">
+          <label className="min-w-0 flex-1">
+            <span className="label flex justify-between">
+              Tamaño del texto <span className="font-normal text-stone">{Math.round((value.textScale || 1) * 100)}%</span>
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="text-xs text-stone" aria-hidden>
+                A
+              </span>
+              <input
+                type="range"
+                min={TEXT_SCALE.min}
+                max={TEXT_SCALE.max}
+                step={TEXT_SCALE.step}
+                value={value.textScale || 1}
+                onChange={(e) => set('textScale', Number(e.target.value))}
+                className="w-full accent-[#b8925a]"
+              />
+              <span className="text-lg text-stone" aria-hidden>
+                A
+              </span>
+            </span>
+          </label>
+          <button
+            type="button"
+            onClick={() => set('bold', !value.bold)}
+            aria-pressed={value.bold}
+            className={`h-11 shrink-0 rounded-xl border px-4 text-sm font-bold transition ${
+              value.bold ? 'border-gold bg-gold/10 ring-2 ring-gold/25' : 'border-ink/15 bg-white hover:border-ink/40'
+            }`}
+          >
+            <span className="text-base">B</span> Negrita
+          </button>
         </div>
         {!zoneMode && (
           <>

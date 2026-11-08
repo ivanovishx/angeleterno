@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
-import { parseZones, type Order, type Product, type User } from '../shared/types.ts'
+import { normalizeStatus, parseZones, type Order, type OrderStatusChange, type Product, type User } from '../shared/types.ts'
 import { isTestPhone } from './testLogin.ts'
 
 export const ROOT = path.resolve(import.meta.dirname, '..')
@@ -60,6 +60,11 @@ if (!(db.prepare('PRAGMA table_info(products)').all() as Array<{ name: string }>
   db.exec('ALTER TABLE products ADD COLUMN zones TEXT')
 }
 
+// Migración: historial de cambios de estado de cada pedido
+if (!(db.prepare('PRAGMA table_info(orders)').all() as Array<{ name: string }>).some((c) => c.name === 'history')) {
+  db.exec("ALTER TABLE orders ADD COLUMN history TEXT NOT NULL DEFAULT '[]'")
+}
+
 type Row = Record<string, unknown>
 
 export function toProduct(r: Row): Product {
@@ -81,10 +86,14 @@ export function toProduct(r: Row): Product {
 }
 
 export function toOrder(r: Row): Order {
+  const status = normalizeStatus(String(r.status))
+  const history = (JSON.parse(String(r.history ?? '[]')) as OrderStatusChange[]).map((h) => ({ ...h, status: normalizeStatus(h.status) }))
   return {
     id: Number(r.id),
     userId: Number(r.user_id),
-    status: r.status as Order['status'],
+    status,
+    // Pedidos anteriores al historial: se toma la fecha de creación
+    history: history.length ? history : [{ status, at: String(r.created_at) }],
     total: Number(r.total),
     items: JSON.parse(String(r.items)),
     shippingAddress: String(r.shipping_address),

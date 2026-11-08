@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type PointerEvent } from 'react'
 import type { Customization } from '../../shared/types'
-import { CHAR_WIDTH, FONT_FAMILY, fullDate, wrap } from '../lib/inscription'
+import { FONT_FAMILY, fullDate, textStyle, wrap } from '../lib/inscription'
 import { yearOf } from '../lib/format'
 import type { PreviewProduct } from './MemorialPreview'
 
@@ -107,8 +107,8 @@ export function PhotoPreview({ product, customization: c, className = '', editab
 
   // ---- Placa ----
   const pq = zones.plaque && { x: zones.plaque.x * W, y: zones.plaque.y * H, w: zones.plaque.w * W, h: zones.plaque.h * H }
-  const font = FONT_FAMILY[c.font]
-  const script = c.font === 'caligrafica'
+  const font = FONT_FAMILY[c.font] ?? FONT_FAMILY.clasica
+  const { script, scale, weight, charWidth } = textStyle(c)
   // Borde difuminado de la zona; en el grabado es más angosto para que no se asome el texto original
   const feather = pq ? Math.min(pq.w, pq.h) * (zones.plaque?.style === 'grabado' ? 0.02 : 0.035) : 0
   const inner = pq && { x: pq.x + feather * 2, y: pq.y + feather * 2, w: pq.w - feather * 4, h: pq.h - feather * 4 }
@@ -123,12 +123,12 @@ export function PhotoPreview({ product, customization: c, className = '', editab
   const name = c.fullName || 'Nombre completo'
   const nameLines = engraved ? splitName(name) : [name]
   const longest = Math.max(...nameLines.map((l) => l.length))
-  const nameSize = inner
-    ? Math.min(inner.h * (engraved ? (script ? 0.21 : 0.15) : script ? 0.3 : 0.23), (inner.w * 0.95) / (longest * CHAR_WIDTH[c.font]))
+  let nameSize = inner
+    ? Math.min(inner.h * (engraved ? (script ? 0.21 : 0.15) : script ? 0.3 : 0.23) * scale, (inner.w * 0.95) / (longest * charWidth))
     : 0
-  const dateSize = inner ? inner.h * (engraved ? 0.085 : 0.135) : 0
-  const msgSize = inner ? inner.h * (engraved ? (script ? 0.1 : 0.07) : script ? 0.15 : 0.105) : 0
-  const msgChars = inner ? Math.floor((inner.w * 0.95) / (msgSize * (script ? 0.42 : 0.5))) : 40
+  let dateSize = inner ? inner.h * (engraved ? 0.085 : 0.135) * scale : 0
+  let msgSize = inner ? inner.h * (engraved ? (script ? 0.1 : 0.07) : script ? 0.15 : 0.105) * scale : 0
+  const msgChars = inner ? Math.floor((inner.w * 0.95) / (msgSize * charWidth * 0.92)) : 40
   const msgLines = wrap(c.epitaph || 'Mensaje de la familia', msgChars, engraved ? 3 : 2)
   const hasDates = Boolean(c.birthDate || c.deathDate)
   const dates = engraved
@@ -139,9 +139,15 @@ export function PhotoPreview({ product, customization: c, className = '', editab
   let layout: { nameY: number[]; dateY: number[]; dividerY: number; msgY: number[] } | null = null
   if (inner) {
     const gap = inner.h * 0.04
+    const blockHeight = () => nameLines.length * nameSize * 1.12 + gap + dates.length * dateSize * 1.12 + gap * 2.5 + msgLines.length * msgSize * 1.28
+    // Con el texto agrandado, todo se reduce lo necesario para no salirse de la zona
+    const fit = Math.min(1, (inner.h * 0.98) / blockHeight())
+    nameSize *= fit
+    dateSize *= fit
+    msgSize *= fit
     const nameBlock = nameLines.length * nameSize * 1.12
     const dateBlock = dates.length * dateSize * 1.12
-    const blockH = nameBlock + gap + dateBlock + gap * 2.5 + msgLines.length * msgSize * 1.28
+    const blockH = blockHeight()
     let y = inner.y + (inner.h - blockH) / 2
     const nameY = nameLines.map((_, i) => y + nameSize * 0.85 + i * nameSize * 1.12)
     y += nameBlock + gap
@@ -268,7 +274,7 @@ export function PhotoPreview({ product, customization: c, className = '', editab
                 x={cx}
                 y={layout!.nameY[i]}
                 fontSize={nameSize}
-                fontWeight={script ? 400 : engraved ? 500 : 700}
+                fontWeight={weight}
                 style={{ fontFamily: font }}
                 opacity={c.fullName ? 1 : 0.45}
                 {...textShadow}
@@ -282,7 +288,7 @@ export function PhotoPreview({ product, customization: c, className = '', editab
                 x={cx}
                 y={layout!.dateY[i]}
                 fontSize={dateSize}
-                fontWeight={engraved ? 500 : 700}
+                fontWeight={weight}
                 letterSpacing={engraved ? dateSize * 0.08 : undefined}
                 style={{ fontFamily: FONT_FAMILY[script ? 'clasica' : c.font] }}
                 opacity={dateFilled(i) ? 1 : 0.45}
@@ -303,7 +309,7 @@ export function PhotoPreview({ product, customization: c, className = '', editab
                 x={cx}
                 y={layout!.msgY[i]}
                 fontSize={msgSize}
-                fontWeight={script ? 400 : engraved ? 500 : 700}
+                fontWeight={weight}
                 letterSpacing={engraved && !script ? msgSize * 0.06 : undefined}
                 style={{ fontFamily: font }}
                 opacity={c.epitaph ? 1 : 0.45}
@@ -318,7 +324,7 @@ export function PhotoPreview({ product, customization: c, className = '', editab
 
       {/* Guías de las zonas editables (solo al personalizar) */}
       {editable && (
-        <g fill="none" stroke="#fff" strokeWidth="3" strokeDasharray="14 10" pointerEvents="none">
+        <g fill="none" stroke="#fff" strokeWidth="3" strokeDasharray="14 10" pointerEvents="none" data-export="skip">
           {poly && <polygon points={polyPoints} stroke={c.customImage ? '#fff' : '#ffd98a'} strokeOpacity=".9" />}
           {pq && <rect x={pq.x} y={pq.y} width={pq.w} height={pq.h} rx="6" stroke="#ffd98a" strokeOpacity=".9" />}
           <g stroke="none" fontSize="22" fontWeight="600" style={{ fontFamily: FONT_FAMILY.moderna }}>
